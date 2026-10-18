@@ -119,4 +119,15 @@ readelf -SW sources/kernel/out/vmlinux | grep -q '\.BTF' || {
 python3 ci/verify_new_symvers.py sources/kernel/out/Module.symvers | tee ci-out/generated_crc_check.txt
 cp sources/kernel/out/Module.symvers ci-out/generated_kernel_Module.symvers
 cp sources/kernel/out/.config ci-out/generated_kernel.config
+echo '--- SAVE KERNEL BUILD OUTPUT ---'
+
+zstd -T2 -3 -f sources/kernel/out/vmlinux \
+  -o ci-out/vmlinux.zst
+
+tar -C sources/kernel/out -cf - \
+  .config Module.symvers \
+  include/config include/generated \
+  arch/arm64/include/generated \
+  scripts/module.lds scripts/mod scripts/basic \
+  | zstd -T2 -3 -o ci-out/generated-output.tar.zst
 printf 'FOUNDATION BUILD SUCCESS, 739/739 reference kernel CRC match. NOT a Display build.\n' | tee ci-out/foundation_status.txt
