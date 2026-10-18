@@ -1,0 +1,79 @@
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
+@@ -618,8 +618,9 @@
+ 	if (enter_abyp) {
+ 		iris_send_ipopt_cmds(IRIS_IP_SYS, 4);
+ 		IRIS_LOGD("%s, Enter ABYP.", __func__);
+-	} else {
+-		if (pcfg && pcfg->iris_i2c_switch) {
++	} else {
++		IRIS_LOGI("IRIS23_SYS5 transport=%s", (pcfg && pcfg->iris_i2c_switch) ? "i2c" : "dsi");
++		if (pcfg && pcfg->iris_i2c_switch) {
+ 			iris_send_ipopt_cmds_i2c(IRIS_IP_SYS, 5);
+ 			udelay(1000);
+ 		} else {
+@@ -648,7 +649,8 @@
+ 			return -EINVAL;
+ 		}
+ 
+-		val = arr[0];
++		val = arr[0];
++		IRIS_LOGI("IRIS23_DPHY aux=%d poll=%d addr=0x%08x value=0x%08x ret=%d", aux_channel, i, dphy_itf_ctrl, val, ret);
+ 		if (val & 0x10) {
+ 			if (val & 0x10000000) {
+ 			IRIS_LOGI("%s, ST_DPHY_DSI_FLUSH is 1, [0x%x] = 0x%08x", __func__,
+@@ -823,9 +825,10 @@
+ static void _iris_plus_reset_mipi(void)
+ {
+ 	struct iris_cfg *pcfg = iris_get_cfg();
+-	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
+-
+-	if (prev_mode == ABP_SLEEP_MODE) {
++	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
++
++	IRIS_LOGI("IRIS23_WAKE prev_mode=%d i2c=%d initialized=%d", prev_mode, pcfg->iris_i2c_switch, pcfg->iris_initialized);
++	if (prev_mode == ABP_SLEEP_MODE) {
+ 		pcfg->iris_initialized = false;
+ 		iris_send_one_wired_cmd(IRIS_POWER_UP_SYS);
+ 		usleep_range(3500, 3501);
+@@ -1337,7 +1340,11 @@
+ 	int i = 0;
+ 	int abyp_status_gpio;
+ 
+-	_iris_dphy_itf_check(false);
++	{
++		int dphy_rc = _iris_dphy_itf_check(false);
++
++		IRIS_LOGI("IRIS23_EXIT dphy_rc=%d one_wired=%d", dphy_rc, one_wired);
++	}
+ 	/* try to exit abyp */
+ 	if (one_wired) {
+ 		iris_send_one_wired_cmd(IRIS_EXIT_ANALOG_BYPASS);
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
+@@ -1610,11 +1610,20 @@
+ 	if (commit) {
+ 		rc = dsi_pll_5nm_set_pclk_div(rsc, commit);
+ 		rc = dsi_pll_5nm_vco_set_rate(rsc);
+-	} else {
+-		rc = dsi_pll_5nm_dynamic_clk_vco_set_rate(rsc);
+-	}
+-
+-	return 0;
++	} else {
++		rc = dsi_pll_5nm_dynamic_clk_vco_set_rate(rsc);
++	}
++
++	/* Diagnostic readback only in the existing powered PLL configure path. */
++	if (commit && rsc->pll_base) {
++		u32 ssc_ctrl = DSI_PLL_REG_R(rsc->pll_base, PLL_SSC_CONTROL);
++
++		DSI_PLL_INFO(rsc, "IRIS23_SSC pll=%u sw=%u ctrl=0x%08x ssc_en_bit=%u rc=%d\n",
++			rsc->index, rsc->ssc_en, ssc_ctrl,
++			!!(ssc_ctrl & SSC_EN), rc);
++	}
++
++	return 0;
+ }
+ 
+ int dsi_pll_5nm_toggle(void *pll, bool prepare)
