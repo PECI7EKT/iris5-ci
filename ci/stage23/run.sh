@@ -101,6 +101,6 @@ sha256sum "$KO" "$GITHUB_WORKSPACE/ci-out/baseline/msm_drm.ko" > "$OUT/module_sh
 [[ "$(sha256sum "$KO" | cut -d' ' -f1)" != 'cecd6506a059a73673b41ff9997844290f361e730d53f0321eaf890f89b3c4c3' ]] || {
   echo 'BLOCKED: Stage22 identical to pinned Stage21 I1 binary'; exit 7;
 }
-cp "$KO" "$OUT/modules/Stage22_I1_plus_SSC_diag_msm_drm.ko"
+cp "$KO" "$OUT/modules/Stage23_I1_plus_SSC_diag_msm_drm.ko"
 restore_display
 printf '%s\n' 'STAGE23 BUILD+ABI PASS (OFFLINE MODULE ONLY; NOT FLASH APPROVED)'
