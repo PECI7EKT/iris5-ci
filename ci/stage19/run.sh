@@ -25,6 +25,7 @@ P3="$PATCH_DIR/0003-P3-reject-pt-fifo-without-received.patch"
 P4="$PATCH_DIR/0004-P4-bound-pt-response-length.patch"
 P5="$PATCH_DIR/0005-P5-66-limit-esd-diagnostics-to-valid-data.patch"
 D1="$PATCH_DIR/0006-D1-review-only-ssc-configure-readback.patch"
+sed -i 's/\r$//' "$D1"
 for p in "$P1" "$P2" "$P3" "$P4" "$P5" "$D1"; do
   [[ -s "$p" ]] || { echo "Missing $p"; exit 3; }
 done
