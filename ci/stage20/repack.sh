@@ -20,6 +20,43 @@ echo "$MODULE_SHA  $KO" | sha256sum -c -
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
   erofs-utils llvm python3 unzip
+# Build pinned erofs-utils with SELinux xattr extraction support.
+sudo apt-get install -y -qq --no-install-recommends \
+  autoconf automake libtool pkg-config \
+  liblz4-dev liblzma-dev libzstd-dev uuid-dev zlib1g-dev
+
+mkdir -p .ci-tools
+git clone --depth=1 --branch v1.8.10 \
+  https://github.com/erofs/erofs-utils.git \
+  .ci-tools/erofs-utils
+
+EXPECTED_EROFS_SHA=51b5939b5f783221310d25146e6a2019ba8129b6
+ACTUAL_EROFS_SHA=$(git -C .ci-tools/erofs-utils rev-parse HEAD)
+
+[[ "$ACTUAL_EROFS_SHA" == "$EXPECTED_EROFS_SHA" ]] || {
+  echo "BLOCKED: erofs-utils commit mismatch"
+  exit 3
+}
+
+(
+  cd .ci-tools/erofs-utils
+  ./autogen.sh
+  ./configure --prefix=/usr/local \
+    --enable-lz4 --enable-lzma \
+    --with-libzstd --with-uuid --disable-fuse
+  make -j2
+  sudo make install
+)
+
+sudo ldconfig
+
+# Require the newer fsck.erofs, including when invoked via sudo.
+sudo fsck.erofs --help | grep -Fq -- '--[no-]xattrs' || {
+  echo "BLOCKED: fsck.erofs does not support xattrs"
+  exit 3
+}
+
+echo "EROFS XATTR SUPPORT: PASS"
 mkdir -p work/original work/rebuilt
 unzip -p "$IN" vendor_dlkm.img > work/original.img
 echo "$BASE_FS_SHA  work/original.img" | sha256sum -c -
