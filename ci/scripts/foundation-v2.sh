@@ -29,7 +29,7 @@ sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   build-essential bc bison flex ccache cmake pkg-config libbpf-dev libdw-dev \
   libelf-dev libssl-dev zlib1g-dev zstd lz4 cpio rsync python3-pyelftools \
-  binutils git ca-certificates
+  binutils git ca-certificates gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
 echo '--- BUILD PINNED PAHOLE 1.27 ---'
 mkdir -p .ci-tools
