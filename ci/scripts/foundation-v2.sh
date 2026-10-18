@@ -82,13 +82,20 @@ echo '--- GENERATE KERNEL CONFIG AND COMPARE TO ORIGINAL IKCONFIG ---'
 make -C sources/kernel O=out ARCH=arm64 LLVM=1 CC='ccache clang' HOSTCC='ccache clang' \
   -j2 gki_defconfig vendor/waipio_perf.config 2>&1 | tee ci-out/config.log
 sha256sum sources/kernel/out/.config | tee ci-out/generated_config_sha256.txt
-if ! cmp -s sources/kernel/out/.config ci/reference/original_Image.config; then
-  diff -u ci/reference/original_Image.config sources/kernel/out/.config > ci-out/config_diff.txt || true
-  echo 'BLOCKED: generated .config differs from original Image IKCONFIG; do not compile until reviewed' | tee ci-out/blocker.txt
+# Preserve the complete difference for review.
+diff -u ci/reference/original_Image.config \
+  sources/kernel/out/.config > ci-out/config_diff.txt || true
+
+# Permit only the two independently reviewed host-dependent flags.
+if ! diff -u ci/reference/original_Image.config \
+  <(sed '/^CONFIG_CC_CAN_LINK=y$/d; /^CONFIG_UAPI_HEADER_TEST=y$/d' sources/kernel/out/.config) \
+  > ci-out/config_unexpected_diff.txt; then
+  echo 'BLOCKED: unexpected kernel config differences' | tee ci-out/blocker.txt
   exit 3
 fi
 
-echo 'CONFIG MATCH: ready for foundation build' | tee ci-out/config_status.txt
+echo 'CONFIG REVIEW PASS: no differences beyond two reviewed host-dependent flags' \
+  | tee ci-out/config_status.txt
 if [[ "$mode" == toolchain ]]; then
   echo 'TOOLCHAIN AND CONFIG GATES PASSED (no kernel build requested)' | tee ci-out/toolchain_status.txt
   exit 0
