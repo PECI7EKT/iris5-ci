@@ -1,0 +1,62 @@
+name: Iris5 Stage22 - I1 SSC EROFS image audit (OFFLINE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'audit first; assemble only after audit succeeds'
+        required: true
+        type: choice
+        default: audit
+        options:
+          - audit
+          - assemble
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: iris5-stage22-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-i1-ssc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout source and audited Stage20 repacker
+        uses: actions/checkout@v4
+
+      - name: Get pinned Stage22 I1 plus SSC build (run 39171112531)
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage22-build-2
+          run-id: 39171112531
+          github-token: ${{ github.token }}
+          path: stage22-source
+
+      - name: Get original AK3 source image from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh release download stage20-input -R '${{ github.repository }}' \
+            --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir source
+
+      - name: Independently audit I1 binary or assemble EROFS
+        env:
+          STAGE22_IMAGE_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          bash ci/stage22/repack.sh
+
+      - name: Upload Stage22 EROFS results (NOT flash approval)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage22-image-I1-${{ inputs.mode }}-${{ github.run_number }}
+          path: stage22-image-output/
+          retention-days: 14
+          if-no-files-found: warn
