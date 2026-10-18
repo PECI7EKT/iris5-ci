@@ -39,6 +39,25 @@ git clone --depth=1 --branch v1.27 https://github.com/acmel/dwarves.git .ci-tool
 actual="$(git -C .ci-tools/dwarves rev-parse HEAD)"
 printf '%s\n' "$actual" | tee ci-out/dwarves_commit.txt
 [[ "$actual" == "$DWARVES_COMMIT" ]] || { echo "BLOCKED: unexpected dwarves commit" | tee ci-out/blocker.txt; exit 3; }
+
+echo '--- FIX PAHOLE 1.27 SEGFAULT ---'
+
+python3 - <<'PY'
+from pathlib import Path
+
+p = Path(".ci-tools/dwarves/dwarves.c")
+s = p.read_text()
+
+old = "\t\tINIT_LIST_HEAD(&cu->tool_list);\n"
+new = old + "\t\tINIT_LIST_HEAD(&cu->node);\n"
+
+if s.count(old) != 1:
+    raise SystemExit("Unexpected pahole source layout")
+
+p.write_text(s.replace(old, new, 1))
+print("pahole fix applied")
+PY
+
 cmake -S .ci-tools/dwarves -B .ci-tools/dwarves-build \
   -DCMAKE_BUILD_TYPE=Release -DLIBBPF_EMBEDDED=OFF -D__LIB=lib \
   -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/.ci-tools/dwarves-install" \
