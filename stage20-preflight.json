@@ -1,0 +1,55 @@
+{
+  "original": {
+    "size": 44953472,
+    "sha256": "922a59ba3d24598b261a65cdb22043155045c7aeaf6e73d11dfe3031f96f4134",
+    "sections": {
+      ".BTF": {
+        "offset": 44449204,
+        "size": 498186,
+        "sha256": "0ce505b997c4140cf4540efa086c1071e0f76ab4a3bb8d19a939804bbe24fe67"
+      },
+      "__versions": {
+        "offset": 2772288,
+        "size": 48832,
+        "sha256": "c3cd8720a952f6abdef8ac4105d1069655e8f116f6809a9cc23050a67d4c5a4d"
+      },
+      ".modinfo": {
+        "offset": 2765736,
+        "size": 2172,
+        "sha256": "ce49bfa2c44af22c14ac3e6929a4a7c2bf2a928f5e9358aacf1d31038dbd5b0e"
+      },
+      ".symtab": {
+        "offset": 43671552,
+        "size": 599952,
+        "sha256": "539199ff6216cb329ce9ed3e579d49fca8a893b620b36cd620c5486b5ebe1a94"
+      }
+    }
+  },
+  "stripped": {
+    "size": 7015272,
+    "sha256": "0a8f7660c5cd2647b5a0750469c76f579856816d7bc149b7ba23f5984384357d",
+    "sections": {
+      ".BTF": {
+        "offset": 6511835,
+        "size": 498186,
+        "sha256": "0ce505b997c4140cf4540efa086c1071e0f76ab4a3bb8d19a939804bbe24fe67"
+      },
+      "__versions": {
+        "offset": 2772288,
+        "size": 48832,
+        "sha256": "c3cd8720a952f6abdef8ac4105d1069655e8f116f6809a9cc23050a67d4c5a4d"
+      },
+      ".modinfo": {
+        "offset": 2765736,
+        "size": 2172,
+        "sha256": "ce49bfa2c44af22c14ac3e6929a4a7c2bf2a928f5e9358aacf1d31038dbd5b0e"
+      },
+      ".symtab": {
+        "offset": 5774560,
+        "size": 562344,
+        "sha256": "37ff3084f1b88ba3fe6e76b469f13b5e13350632973753609e0522bb94df93b8"
+      }
+    }
+  },
+  "retained_sections_equal": true
+}
