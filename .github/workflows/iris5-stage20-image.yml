@@ -1,0 +1,48 @@
+name: Iris5 Stage20 - UNMODIFIED module EROFS image audit
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'audit checks only; assemble builds candidate image subject to strict validation'
+        required: true
+        type: choice
+        default: audit
+        options:
+          - audit
+          - assemble
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download authentic Stage18 baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage18-baseline-3
+          run-id: 39122913641
+          github-token: ${{ github.token }}
+          path: stage18
+      - name: Download original kernel installer (public release asset)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p source
+          gh release download stage20-input -R '${{ github.repository }}' --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir source
+      - name: Verify and audit source image / optionally assemble EROFS
+        env:
+          STAGE20_MODE: ${{ inputs.mode }}
+        run: |
+          bash ci/stage20/repack.sh
+      - name: Upload diagnostics (NOT A FLASH APPROVAL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage20-${{ inputs.mode }}-${{ github.run_number }}
+          path: stage20-output/
+          retention-days: 7
+          if-no-files-found: warn
