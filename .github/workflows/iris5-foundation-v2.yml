@@ -1,0 +1,50 @@
+name: Iris5 6.6.139 - foundation v2 (pahole 1.27)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "toolchain = check tools/config only; foundation = also compile Image and in-tree modules"
+        required: true
+        type: choice
+        default: toolchain
+        options:
+          - toolchain
+          - foundation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iris5-foundation-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout this CI repository
+        uses: actions/checkout@v4
+      - name: Validate Stage 16 reference and pinned source identities
+        run: |
+          set -euo pipefail
+          python3 ci/verify_reference.py
+          bash ci/scripts/fetch_sources.sh
+      - name: Verify and optionally compile the kernel foundation
+        env:
+          RUN_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          bash ci/scripts/foundation-v2.sh "$RUN_MODE"
+      - name: Upload logs and diagnostics (never flashable images)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-v2-${{ inputs.mode }}-${{ github.run_number }}
+          path: ci-out/
+          if-no-files-found: warn
+          retention-days: 14
