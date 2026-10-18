@@ -120,6 +120,26 @@ if [[ "$MODE" == preflight ]]; then
   exit 0
 fi
 
+# Qualcomm's source-pinned trace_smcinvoke.h includes from kernel/include/trace
+# via ../../../../sm8450-modules, expecting a workspace-root sibling checkout.
+# Our checkout is sources/modules; give Kbuild its original layout via a symlink.
+# Do NOT modify the Qualcomm trace header or kernel sources.
+note '--- RESTORE ORIGINAL QUALCOMM TRACE INCLUDE LAYOUT ---'
+MODULES_ALIAS="$GITHUB_WORKSPACE/sm8450-modules"
+if [[ -e "$MODULES_ALIAS" || -L "$MODULES_ALIAS" ]]; then
+  [[ "$(realpath "$MODULES_ALIAS")" == "$(realpath "$MOD")" ]] ||
+    fail 'unexpected pre-existing sm8450-modules checkout/alias'
+else
+  ln -s "$MOD" "$MODULES_ALIAS"
+fi
+EXPECTED_TRACE="$MOD/qcom/opensource/securemsm-kernel/smcinvoke/compat/trace_smcinvoke.h"
+INCLUDED_TRACE="$K/include/trace/../../../../sm8450-modules/qcom/opensource/securemsm-kernel/smcinvoke/compat/trace_smcinvoke.h"
+[[ -f "$EXPECTED_TRACE" && -f "$INCLUDED_TRACE" ]] ||
+  fail 'Qualcomm trace_smcinvoke.h not resolvable at original TRACE_INCLUDE_PATH'
+[[ "$(realpath "$EXPECTED_TRACE")" == "$(realpath "$INCLUDED_TRACE")" ]] ||
+  fail 'Qualcomm trace header alias points at unexpected source'
+note 'QUALCOMM TRACE HEADER INCLUDE: PASS (unmodified source, workspace symlink)'
+
 note '--- BUILD AUTHENTIC EXTERNAL SYMBOL PROVIDERS IN DEPENDENCY ORDER ---'
 SYMS=()
 LOG_DIR=ci-out/stage18-logs
