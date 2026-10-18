@@ -57,6 +57,22 @@ echo '--- PINNED KERNEL TREE ---'
 git -C sources/kernel checkout --detach 45174e44b18f5d9024b3024e3de0d48c610b2bb3 \
   2>&1 | tee ci-out/kernel_checkout.log
 
+echo '--- CHECKOUT MATCHING OPLUS HEADERS ---'
+
+git -C sources/modules sparse-checkout set oplus/kernel
+
+git -C sources/modules checkout --detach \
+  34e2cb16f16f81d0eec75dde4915d5f139491b4d
+
+for hdr in touchpanel_event_notify.h device_info.h kernelFwUpdate.h; do
+  if [[ ! -f "sources/kernel/include/soc/oplus/$hdr" ]]; then
+    echo "BLOCKED: missing Oplus header $hdr" | tee ci-out/blocker.txt
+    exit 3
+  fi
+done
+
+echo 'OPLUS HEADER SYMLINKS: PASS'
+
 echo '--- DOWNLOAD AND VERIFY ANDROID CLANG ---'
 mkdir -p prebuilts/clang/host/linux-x86
 git clone --depth=1 --filter=blob:none --sparse --branch android15-platform-release \
