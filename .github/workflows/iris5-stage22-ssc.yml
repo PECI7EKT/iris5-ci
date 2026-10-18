@@ -1,0 +1,56 @@
+name: Iris5 Stage22 - I1 plus stock SSC policy (OFFLINE)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify first; build only after verify passes'
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - build
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: iris5-stage22-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  stage22-ssc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout CI scripts
+        uses: actions/checkout@v4
+      - name: Restore pinned foundation for build
+        if: ${{ inputs.mode == 'build' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-v2-foundation-8
+          run-id: 39088927882
+          github-token: ${{ github.token }}
+          path: stage18-foundation
+      - name: Verify source pins and check isolated patches
+        run: |
+          set -euo pipefail
+          python3 ci/verify_reference.py
+          bash ci/scripts/fetch_sources.sh
+          bash ci/stage22/run.sh verify
+      - name: Compile baseline and I1 plus SSC, validate ABI
+        if: ${{ inputs.mode == 'build' }}
+        run: |
+          set -euo pipefail
+          bash ci/stage18/run.sh baseline
+          bash ci/stage22/run.sh build
+      - name: Upload offline diagnostics (NOT flash approval)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage22-${{ inputs.mode }}-${{ github.run_number }}
+          path: ci-out/stage22/
+          if-no-files-found: warn
+          retention-days: 14
