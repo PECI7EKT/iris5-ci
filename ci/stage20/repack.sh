@@ -111,7 +111,7 @@ if (( BYTES > SIZE )); then
  echo "BLOCKED: rebuilt EROFS is $BYTES > partition $SIZE bytes"
  exit 5
 fi
-truncate -s "$SIZE" work/rebuilt.img
+sudo truncate -s "$SIZE" work/rebuilt.img
 fsck.erofs work/rebuilt.img
 sudo fsck.erofs --xattrs --extract=work/rebuilt work/rebuilt.img
 python3 ci/stage20/manifest.py work/rebuilt stage20-output/rebuilt_manifest.json stage20-output/original_manifest.json
