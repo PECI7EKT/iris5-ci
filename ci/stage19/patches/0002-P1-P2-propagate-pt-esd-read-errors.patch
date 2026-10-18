@@ -1,0 +1,41 @@
+From: Iris5 investigation <review-only@localhost>
+Subject: [REVIEW ONLY] P1/P2: propagate PT read failure through ESD cleanup
+
+Upstream-base: 50177be9d969b9ee32fbe0d34318f1da3069b6d4
+Scope: error handling only; not runtime-attested or device-tested.
+
+diff --git a/qcom/opensource/display-drivers/msm/dsi/dsi_display.c b/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
+index 64d21fa0d3a3933923104e8931cac6d9e7e26fe3..7b63f34550714b49890a29dd71aa926942537b20 100644
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
+@@ -945,6 +945,8 @@ static int dsi_display_read_status(struct dsi_display_ctrl *ctrl,
+ 		rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &cmds[i]);
+ 		if (rc <= 0) {
+ 			DSI_ERR("rx cmd transfer failed rc=%d\n", rc);
++			if (!rc)
++				rc = -EIO;
+ 		} else {
+ 			memcpy(config->return_buf + start,
+ 				config->status_buf, lenp[i]);
+@@ -952,6 +954,8 @@ static int dsi_display_read_status(struct dsi_display_ctrl *ctrl,
+ 		}
+ 
+ 		dsi_ctrl_transfer_unprepare(ctrl->ctrl, cmds[i].ctrl_flags);
++		if (rc < 0)
++			break;
+ 	}
+ 
+ #if defined(CONFIG_PXLW_IRIS)
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+index 74d29dd510f15c4c649b614916d72f03114a0aaf..51d1be94293242715ab434b1ac7a83a52903a5a0 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+@@ -1120,7 +1120,7 @@ int iris_pt_send_panel_cmd(
+ 	}
+ 
+ 	if (cmdset->count == 1 && iris_is_read_cmd(&cmdset->cmds[0]))
+-		iris_pt_read_panel_cmd(panel, cmdset);
++		return iris_pt_read_panel_cmd(panel, cmdset);
+ 	else
+ 		_iris_pt_write_panel_cmd(panel, cmdset);
+ 

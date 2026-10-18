@@ -1,0 +1,86 @@
+From: Iris5 investigation <review-only@localhost>
+Subject: [REVIEW ONLY] I1: require complete I2C reads before publishing data
+
+Upstream-base: 50177be9d969b9ee32fbe0d34318f1da3069b6d4
+Scope: error handling only; not runtime-attested or device-tested.
+
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_i2c.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_i2c.c
+index 80884f89170671d5c78c929c54ca95d280b32c3a..2c2876963b391ae70dd172729fb68ea4039f8096 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_i2c.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_i2c.c
+@@ -75,9 +75,9 @@ static int iris_i2c_read_transfer(
+ 	for (i = 0; i < len; i++) {
+ 		pos = i << 1;
+ 		ret = i2c_transfer(adapter, &msgs[pos], 2);
+-		if (ret < 1) {
++		if (ret != 2) {
+ 			pr_err("%s: I2C READ FAILED=[%d]\n", __func__, ret);
+-			return -EACCES;
++			return ret < 0 ? ret : -EIO;
+ 		}
+ 	}
+ 	return 0;
+@@ -328,8 +328,10 @@ static int iris_i2c_single_conver_ocp_read(uint32_t *ptr, uint32_t len)
+ 
+ 	ret = iris_i2c_rw(FOUR_BYTE_REG_LEN_READ, val_tmp, len);
+ 
+-	for (i = 0; i < len; i++)
+-		ptr[i] = val_tmp[i].data;
++	if (!ret) {
++		for (i = 0; i < len; i++)
++			ptr[i] = val_tmp[i].data;
++	}
+ 
+ 	kfree(p);
+ 	p = NULL;
+@@ -404,11 +406,13 @@ static int iris_i2c_burst_conver_ocp_read(uint32_t *ptr, uint32_t dlen)
+ 		pr_err("[iris] %s: i2c_transfer failed, ret=%d\n", __func__, ret);
+ 	}
+ 
+-	for (i = 0; i < reg_num; i++) {
+-		ptr[i] = (iris_payload[i*4 + 5]<<24) |
+-			(iris_payload[i*4 + 6]<<16) |
+-			(iris_payload[i*4 + 7]<<8)  |
+-			(iris_payload[i*4 + 8]);
++	if (!ret) {
++		for (i = 0; i < reg_num; i++) {
++			ptr[i] = (iris_payload[i*4 + 5]<<24) |
++				(iris_payload[i*4 + 6]<<16) |
++				(iris_payload[i*4 + 7]<<8)  |
++				(iris_payload[i*4 + 8]);
++		}
+ 	}
+ 
+ 	kfree(iris_payload);
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_loop_back.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_loop_back.c
+index dd16d825c0356400267cd641925a718bc5db316a..49489979b1ad0f3e68e4b929c31313801585dfeb 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_loop_back.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_loop_back.c
+@@ -183,20 +183,24 @@ static int iris_i2c_test_verify(void)
+ 
+ 	val[0] = 0xf001fff8;
+ 	rc = iris_i2c_conver_ocp_read(val, 1, false);
+-	IRIS_LOGD("%s,%d: value = 0x%x", __func__, __LINE__, val[0]);
+ 	if (rc) {
+ 		IRIS_LOGE("%s(%d), failed to read, return: %d",
+ 				__func__, __LINE__, rc);
+ 		return rc;
+ 	}
+ 
++	IRIS_LOGD("%s,%d: value = 0x%x", __func__, __LINE__, val[0]);
++
+ 	val[0] = 0xf1800000;
+-	iris_i2c_conver_ocp_read(val, 1, false);
++	rc = iris_i2c_conver_ocp_read(val, 1, false);
++	if (rc)
++		return rc;
+ 	val[1] = val[0] | 0x1;
+ 	val[0] = 0xf1800000;
+ 	iris_i2c_single_conver_ocp_write(val, 1);
+ 	rc = iris_i2c_conver_ocp_read(val, 1, false);
+-	IRIS_LOGD("%s,%d: value = 0x%x", __func__, __LINE__, val[0]);
++	if (!rc)
++		IRIS_LOGD("%s,%d: value = 0x%x", __func__, __LINE__, val[0]);
+ 
+ 	return rc;
+ 

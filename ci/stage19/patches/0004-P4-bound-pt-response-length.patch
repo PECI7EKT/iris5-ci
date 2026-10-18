@@ -1,0 +1,56 @@
+From: Iris5 investigation <review-only@localhost>
+Subject: [REVIEW ONLY] P4: bound decoded PT response by caller capacity
+
+Upstream-base: 50177be9d969b9ee32fbe0d34318f1da3069b6d4
+Separate stage11 patch. Not device-tested or runtime-attested.
+
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+index 74d29dd510f15c4c649b614916d72f03114a0aaf..3fb42ae04ba34124bda7e9147a8f602464f22236 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+@@ -976,3 +976,3 @@
+ 		*offset = 4;
+-		rc = ptr[1];
++		rc = (u8)ptr[1] | ((u8)ptr[2] << 8);
+ 		break;
+@@ -989,5 +989,7 @@
+ 	u32 rlen = 0;
++	int response_len;
++	size_t rx_capacity;
+ 	u32 intstat = 0;
+ 	int retry_cnt, frame_interval;
+-	u32 offset = 0;
++	int offset = 0;
+ 	int rc = 0;
+@@ -1000,6 +1002,6 @@
+ 	rbuf = (u8 *)cmdset->cmds[0].msg.rx_buf;
+-	rlen = cmdset->cmds[0].msg.rx_len;
+-
+-	if (!rbuf || rlen <= 0) {
+-		IRIS_LOGE("%s(), rbuf: %p, rlen: %d", __func__, rbuf, rlen);
++	rx_capacity = cmdset->cmds[0].msg.rx_len;
++
++	if (!rbuf || !rx_capacity) {
++		IRIS_LOGE("%s(), rbuf: %p, capacity: %zu", __func__, rbuf, rx_capacity);
+ 		return -EINVAL;
+@@ -1034,11 +1036,15 @@
+ 
+-	rlen = _iris_pt_remove_respond_hdr(val.p, &offset);
+-	IRIS_LOGV("%s(), read len: %d", __func__, rlen);
+-
+-	if (rlen <= 0) {
++	response_len = _iris_pt_remove_respond_hdr(val.p, &offset);
++	IRIS_LOGV("%s(), read len: %d", __func__, response_len);
++
++	if (response_len <= 0) {
+ 		rc = -1;
+ 		IRIS_LOGE("%s(), failed to remove respond header, val: 0x%x, rlen: %d, rc: %d",
+-				  __func__, val.pld32, rlen, rc);
++				  __func__, val.pld32, response_len, rc);
+ 		return rc;
+ 	}
++
++	if ((size_t)response_len > rx_capacity)
++		return -EMSGSIZE;
++	rlen = response_len;
+ 

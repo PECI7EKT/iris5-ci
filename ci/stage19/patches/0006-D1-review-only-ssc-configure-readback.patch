@@ -1,0 +1,38 @@
+--- a/dsi/dsi_pll_5nm.c
++++ b/dsi/dsi_pll_5nm.c
+@@ -1542,6 +1542,17 @@
+ 	return rc;
+ }
+ 
++/* Review-only diagnostic: called in the existing PLL register-access context. */
++static void dsi_pll_ssc_diag(struct dsi_pll_resource *rsc, bool commit,
++		const char *phase)
++{
++	u32 control = DSI_PLL_REG_R(rsc->pll_base, PLL_SSC_CONTROL);
++
++	DSI_PLL_INFO(rsc,
++		"SSC_DIAG phase=%s commit=%d configured=%d control=0x%08x enabled=%d\n",
++		phase, commit, rsc->ssc_en, control, !!(control & SSC_EN));
++}
++
+ int dsi_pll_5nm_configure(void *pll, bool commit)
+ {
+ 
+@@ -1554,6 +1565,8 @@
+ 	dsi_pll_enable_pll_bias(rsc);
+ 	if (rsc->slave)
+ 		dsi_pll_enable_pll_bias(rsc->slave);
++
++	dsi_pll_ssc_diag(rsc, commit, "pre-configure");
+ 
+ 	if (commit)
+ 		dsi_pll_init_val(rsc);
+@@ -1566,6 +1579,8 @@
+ 	} else {
+ 		rc = dsi_pll_5nm_dynamic_clk_vco_set_rate(rsc);
+ 	}
++
++	dsi_pll_ssc_diag(rsc, commit, "post-configure");
+ 
+ 	return 0;
+ }

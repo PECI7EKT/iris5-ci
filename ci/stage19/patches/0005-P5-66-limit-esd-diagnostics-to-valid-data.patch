@@ -1,0 +1,17 @@
+From: Stage19 Iris5 source adaptation <review-only@localhost>
+Subject: [REVIEW ONLY] P5-66: gate Iris ESD diagnostics by complete read
+
+Based on prior Stage14/15 source review; adapted to unbraced source
+at realme-GT-Neo5-Development/sm8450-modules-6.6
+commit 34e2cb16f16f81d0eec75dde4915d5f139491b4d.
+
+Not runtime tested. This P5 guard is meaningful only with P1/P2 early-break.
+
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
+@@ -911,4 +911,4 @@
+ #if defined(CONFIG_PXLW_IRIS)
+-	if (iris_is_chip_supported())
++	if (rc > 0 && iris_is_chip_supported())
+ 		iris_check_reg_read(display->panel);
+ #endif

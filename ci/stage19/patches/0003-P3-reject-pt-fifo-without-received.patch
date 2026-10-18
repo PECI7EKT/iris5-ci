@@ -1,0 +1,22 @@
+From: Iris5 investigation <review-only@localhost>
+Subject: [REVIEW ONLY] P3: return timeout before reading an unready PT FIFO
+
+Upstream-base: 50177be9d969b9ee32fbe0d34318f1da3069b6d4
+Scope: error handling only; not runtime-attested or device-tested.
+
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+index 74d29dd510f15c4c649b614916d72f03114a0aaf..88fa55431b0bf05d24f6638d27ee65f80150afc6 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+@@ -1030,6 +1030,11 @@
+ 				  __func__, intstat, rc);
+ 		return rc;
+ 	}
++	if (!(intstat & IRIS_TX_READ_RESPONSE_RECEIVED)) {
++		IRIS_LOGE("%s(), timed out waiting for read response", __func__);
++		return -ETIMEDOUT;
++	}
++
+ 	val.pld32 = iris_ocp_read(address, cmdset->state);
+ 
+ 	rlen = _iris_pt_remove_respond_hdr(val.p, &offset);
