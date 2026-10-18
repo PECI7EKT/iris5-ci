@@ -16,7 +16,7 @@ trap on_exit EXIT
   echo '--- CPU ---'; nproc;
 } | tee ci-out/resource_history.txt
 
-avail_mb="$(df -Pm --output=avail . | tail -1 | tr -d ' ')"
+avail_mb="$(df -Pm . | awk 'NR==2 {print $4}')"
 ram_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
 if (( avail_mb < 9500 || ram_kb < 11500000 )); then
   printf 'BLOCKED: need >=9500MiB free disk and >=11500000KiB RAM; disk=%sMiB RAM=%sKiB\n' "$avail_mb" "$ram_kb" | tee ci-out/blocker.txt
@@ -94,7 +94,7 @@ if [[ "$mode" == toolchain ]]; then
   exit 0
 fi
 
-avail_mb="$(df -Pm --output=avail . | tail -1 | tr -d ' ')"
+avail_mb="$(df -Pm . | awk 'NR==2 {print $4}')"
 if (( avail_mb < 6000 )); then
   echo "BLOCKED: only ${avail_mb}MiB free after checkout; do not start ThinLTO build" | tee ci-out/blocker.txt
   exit 2
