@@ -9,8 +9,8 @@ BASE='ci/stage20/repack.sh'
 I1='stage22-source/modules/Stage22_I1_plus_SSC_msm_drm.ko'
 PATCH='stage22-source/diffs/I1_plus_SSC.diff'
 
-# The seven-variant artifact is the exact successful Stage19 run #3.
-# This path and SHA pin the isolated I1 binary; I1 plus stock SSC policy only.
+# Pin the exact Stage22 build #2 artifact (Stage21 I1 + stock Oplus SSC policy).
+# Independently check its module and source diff SHA256.
 I1_SHA='a70fc3637b4cf9577584a34c6c801a92e3af0bc210810f8c194f2bd17ed3956f'
 I1_PATCH_SHA='9c200c33361bbfc6bfcc63f05430ac8b7178fcc3f42951fcba9ce3a301f07e66'
 I1_STRIPPED_SHA='d479bed161e8b91865f86974d9ee57ec372d9104ab6ac6becbd62ee0928bb822'
@@ -52,7 +52,7 @@ if 'sudo fsck.erofs --xattrs --extract=work/original work/original.img' not in s
 # Ensure that all diagnostics/artifacts cannot be confused with baseline Stage20.
 s=s.replace('stage20-output','stage22-image-output')
 Path('ci/stage22/generated_repack.sh').write_text(s)
-print('STAGE22 REPACK DIFF: only pin, module, labels and output directory changed')
+print('STAGE22 REPACK DIFF: pinned module, paths, labels and output directory only')
 PY
 
 cat >stage22-image-output/provenance.txt <<EOF
@@ -72,7 +72,7 @@ EOF
 # module metadata, EROFS extraction, xattrs, inode owner/mode, and output size.
 STAGE20_MODE="$MODE" bash ci/stage22/generated_repack.sh
 
-# Independently bind the newly stripped ELF to the exact audited Stage19 I1.
+# Independently verify the stripped ELF of the exact audited Stage22 module.
 test -s stage22-image-output/STAGE22-I1-SSC-stripped-msm_drm.ko
 echo "$I1_STRIPPED_SHA  stage22-image-output/STAGE22-I1-SSC-stripped-msm_drm.ko" | sha256sum -c -
 if [[ "$MODE" == assemble ]]; then
