@@ -68,7 +68,7 @@
 +	if (commit && rsc->pll_base) {
 +		u32 ssc_ctrl = DSI_PLL_REG_R(rsc->pll_base, PLL_SSC_CONTROL);
 +
-+		DSI_PLL_INFO(rsc, "IRIS23_SSC pll=%u sw=%u ctrl=0x%08x ssc_en_bit=%u rc=%d\n",
++		DSI_PLL_INFO(rsc, "IRIS23_SSC pll=%u sw=%d ctrl=0x%08x ssc_en_bit=%d rc=%d\n",
 +			rsc->index, rsc->ssc_en, ssc_ctrl,
 +			!!(ssc_ctrl & SSC_EN), rc);
 +	}
