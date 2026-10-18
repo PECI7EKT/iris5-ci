@@ -13,11 +13,11 @@ KPIN='45174e44b18f5d9024b3024e3de0d48c610b2bb3'
 I1="$GITHUB_WORKSPACE/ci/stage19/patches/0001-I1-require-complete-i2c-reads.patch"
 SSC="$GITHUB_WORKSPACE/ci/stage22/patches/0001-SSC-honor-oplus-disable.patch"
 mkdir -p "$OUT"/logs "$OUT"/diffs "$OUT"/modules "$OUT"/abi
-exec > >(tee "$OUT/logs/stage22.log") 2>&1
+exec > >(tee "$OUT/logs/stage23.log") 2>&1
 DIAG="$GITHUB_WORKSPACE/ci/stage23/patches/0001-stage23-readonly-dphy-ssc-diagnostics.patch"
 for f in "$I1" "$SSC" "$DIAG"; do [[ -s "$f" ]] || { echo "BLOCKED: missing $f"; exit 3; }; done
 echo 'd4a4b0f2a5c796ad642f3c61751b685474dd48750ce740061ce718ed4fcc223b  '"$I1" | sha256sum -c -
-sha256sum "$I1" "$SSC" > "$OUT/patches.sha256"
+sha256sum "$I1" "$SSC" "$DIAG" > "$OUT/patches.sha256"
 git -C "$MOD" checkout --detach "$PIN"
 [[ "$(git -C "$MOD" rev-parse HEAD)" == "$PIN" ]] || exit 3
 [[ "$MODE" != build || "$(git -C "$K" rev-parse HEAD)" == "$KPIN" ]] || { echo 'BLOCKED: kernel pin mismatch'; exit 3; }
@@ -99,7 +99,7 @@ cp "$GITHUB_WORKSPACE/ci-out/baseline_abi.json" "$OUT/abi/I1_plus_SSC_diag.json"
 cp "$OUT/abi/baseline.json" "$GITHUB_WORKSPACE/ci-out/baseline_abi.json"
 sha256sum "$KO" "$GITHUB_WORKSPACE/ci-out/baseline/msm_drm.ko" > "$OUT/module_sha256.txt"
 [[ "$(sha256sum "$KO" | cut -d' ' -f1)" != 'cecd6506a059a73673b41ff9997844290f361e730d53f0321eaf890f89b3c4c3' ]] || {
-  echo 'BLOCKED: Stage22 identical to pinned Stage21 I1 binary'; exit 7;
+  echo 'BLOCKED: Stage23 identical to pinned Stage21 I1 binary'; exit 7;
 }
 cp "$KO" "$OUT/modules/Stage23_I1_plus_SSC_diag_msm_drm.ko"
 restore_display
