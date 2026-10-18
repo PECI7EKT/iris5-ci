@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Stage22: Stage21 I1 plus a single isolated Oplus SSC DT policy override.
+# Source verification and offline target build ONLY. No device operations.
+set -euo pipefail
+MODE="${1:-verify}"
+[[ "$MODE" == verify || "$MODE" == build ]] || { echo "Bad mode: $MODE" >&2; exit 2; }
+K="$GITHUB_WORKSPACE/sources/kernel"
+MOD="$GITHUB_WORKSPACE/sources/modules"
+DR="$MOD/qcom/opensource/display-drivers"
+OUT="$GITHUB_WORKSPACE/ci-out/stage22"
+PIN='34e2cb16f16f81d0eec75dde4915d5f139491b4d'
+KPIN='45174e44b18f5d9024b3024e3de0d48c610b2bb3'
+I1="$GITHUB_WORKSPACE/ci/stage19/patches/0001-I1-require-complete-i2c-reads.patch"
+SSC="$GITHUB_WORKSPACE/ci/stage22/patches/0001-SSC-honor-oplus-disable.patch"
+mkdir -p "$OUT"/logs "$OUT"/diffs "$OUT"/modules "$OUT"/abi
+exec > >(tee "$OUT/logs/stage22.log") 2>&1
+for f in "$I1" "$SSC"; do [[ -s "$f" ]] || { echo "BLOCKED: missing $f"; exit 3; }; done
+echo 'd4a4b0f2a5c796ad642f3c61751b685474dd48750ce740061ce718ed4fcc223b  '"$I1" | sha256sum -c -
+sha256sum "$I1" "$SSC" > "$OUT/patches.sha256"
+git -C "$MOD" checkout --detach "$PIN"
+[[ "$(git -C "$MOD" rev-parse HEAD)" == "$PIN" ]] || exit 3
+[[ "$MODE" != build || "$(git -C "$K" rev-parse HEAD)" == "$KPIN" ]] || { echo 'BLOCKED: kernel pin mismatch'; exit 3; }
+restore_display() { git -C "$MOD" restore --source=HEAD --worktree -- qcom/opensource/display-drivers; }
+trap restore_display EXIT
+apply_patches() {
+  for p in "$I1" "$SSC"; do
+    git -C "$MOD" -c core.autocrlf=false apply --check --whitespace=error-all "$p"
+    git -C "$MOD" -c core.autocrlf=false apply --whitespace=error-all "$p"
+  done
+  git -C "$MOD" diff --check -- qcom/opensource/display-drivers
+  local actual expected
+  actual="$(git -C "$MOD" diff --name-only -- qcom/opensource/display-drivers | LC_ALL=C sort)"
+  expected="$(printf '%s\n' \
+    'qcom/opensource/display-drivers/msm/dsi/dsi_pll.c' \
+    'qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_i2c.c' \
+    'qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_loop_back.c' | LC_ALL=C sort)"
+  if [[ "$actual" != "$expected" ]]; then
+    echo 'BLOCKED: unexpected source diff:'
+    printf '%s\n' "$actual"
+    exit 4
+  fi
+  git -C "$MOD" diff --binary -- qcom/opensource/display-drivers > "$OUT/diffs/I1_plus_SSC.diff"
+  test -s "$OUT/diffs/I1_plus_SSC.diff"
+  grep -qF 'oplus,dsi-pll-ssc-disalbed' "$DR/msm/dsi/dsi_pll.c"
+  grep -qF 'PLL SSC disabled by Oplus DT override' "$DR/msm/dsi/dsi_pll.c"
+  echo 'STAGE22 SOURCE CHECK PASS: same I1 and only SSC policy override; no other changes'
+}
+restore_display
+apply_patches
+restore_display
+if [[ "$MODE" == verify ]]; then
+  echo 'STAGE22 VERIFY PASS (NOT COMPILED; NOT DEVICE TESTED)'
+  exit 0
+fi
+# Stage18 baseline must have been built in this SAME job from the pinned
+# foundation; external provider Module.symvers files remain available.
+[[ -s "$GITHUB_WORKSPACE/ci-out/baseline/msm_drm.ko" && -s "$GITHUB_WORKSPACE/ci-out/baseline_abi.json" ]] || {
+  echo 'BLOCKED: verified Stage18 baseline missing'; exit 5;
+}
+cp "$GITHUB_WORKSPACE/ci-out/baseline_abi.json" "$OUT/abi/baseline.json"
+export PATH="$GITHUB_WORKSPACE/prebuilts/clang/host/linux-x86/clang-r510928/bin:$GITHUB_WORKSPACE/.ci-tools/dwarves-install/bin:$PATH"
+export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/.ci-tools/dwarves-install/lib:${LD_LIBRARY_PATH:-}"
+export LLVM=1 LLVM_IAS=1 ARCH=arm64 SUBARCH=arm64 CCACHE_DISABLE=1
+SYM_PATHS=(
+  oplus/kernel/boot/cmdline_parser
+  oplus/kernel/boot/bootmode
+  oplus/kernel/boot/oplus_projectinfo
+  oplus/kernel/device_info/device_info
+  oplus/kernel/touchpanel/touchpanel_notify
+  qcom/opensource/securemsm-kernel
+  qcom/opensource/mm-drivers/msm_ext_display
+  qcom/opensource/mmrm-driver
+)
+SYM_FILES=()
+for rel in "${SYM_PATHS[@]}"; do
+  f="$MOD/$rel/Module.symvers"
+  [[ -s "$f" ]] || { echo "BLOCKED: missing provider symvers $f"; exit 5; }
+  SYM_FILES+=("$f")
+done
+SYMS="${SYM_FILES[*]}"
+make -C "$K" O=out ARCH=arm64 LLVM=1 CC='ccache clang' HOSTCC='ccache clang' \
+  "M=$DR" "DISPLAY_ROOT=$DR" CONFIG_DRM_MSM=m clean > "$OUT/logs/clean.log" 2>&1
+apply_patches
+make -C "$K" O=out ARCH=arm64 LLVM=1 CC='ccache clang' HOSTCC='ccache clang' \
+  "M=$DR" "DISPLAY_ROOT=$DR" CONFIG_DRM_MSM=m \
+  "KBUILD_EXTRA_SYMBOLS=$SYMS" -j2 modules > "$OUT/logs/compile.log" 2>&1
+KO="$DR/msm/msm_drm.ko"
+[[ -s "$KO" ]] || { echo 'BLOCKED: missing compiled msm_drm.ko'; exit 5; }
+python3 "$GITHUB_WORKSPACE/ci/stage18/verify_display.py" "$KO" > "$OUT/logs/verify_abi.log" 2>&1 || {
+  cp "$GITHUB_WORKSPACE/ci-out/baseline_abi.json" "$OUT/abi/failure.json" 2>/dev/null || true
+  echo 'BLOCKED: Stage18 ABI verifier failed'; exit 6;
+}
+cp "$GITHUB_WORKSPACE/ci-out/baseline_abi.json" "$OUT/abi/I1_plus_SSC.json"
+cp "$OUT/abi/baseline.json" "$GITHUB_WORKSPACE/ci-out/baseline_abi.json"
+sha256sum "$KO" "$GITHUB_WORKSPACE/ci-out/baseline/msm_drm.ko" > "$OUT/module_sha256.txt"
+[[ "$(sha256sum "$KO" | cut -d' ' -f1)" != 'cecd6506a059a73673b41ff9997844290f361e730d53f0321eaf890f89b3c4c3' ]] || {
+  echo 'BLOCKED: Stage22 identical to pinned Stage21 I1 binary'; exit 7;
+}
+cp "$KO" "$OUT/modules/Stage22_I1_plus_SSC_msm_drm.ko"
+restore_display
+printf '%s\n' 'STAGE22 BUILD+ABI PASS (OFFLINE MODULE ONLY; NOT FLASH APPROVED)'

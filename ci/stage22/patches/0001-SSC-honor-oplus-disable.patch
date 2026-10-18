@@ -1,0 +1,16 @@
+diff --git a/qcom/opensource/display-drivers/msm/dsi/dsi_pll.c b/qcom/opensource/display-drivers/msm/dsi/dsi_pll.c
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_pll.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_pll.c
+@@ -291,5 +291,12 @@
+ 	pll_res->ssc_en = of_property_read_bool(pdev->dev.of_node,
+ 						"qcom,dsi-pll-ssc-en");
+ 
++	/* Match the stock Oplus policy: explicit disable wins over qcom enable. */
++	if (of_property_read_bool(pdev->dev.of_node,
++				"oplus,dsi-pll-ssc-disalbed")) {
++		pll_res->ssc_en = false;
++		DSI_PLL_INFO(pll_res, "PLL SSC disabled by Oplus DT override\n");
++	}
++
+ 	if (pll_res->ssc_en) {
+ 		DSI_PLL_INFO(pll_res, "PLL SSC enabled\n");
