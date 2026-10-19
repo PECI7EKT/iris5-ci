@@ -1,0 +1,14 @@
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup.c
+@@ -2063,7 +2063,10 @@
+ 			if (is_burst) {
+ 				IRIS_LOGE("%s: Not support burst.", __func__);
+ 			} else {
+-				iris_i2c_single_conver_ocp_write(payload, len/2);
++				/* Stage25: observe actual transport status; preserve existing flow. */
++				int write_rc = iris_i2c_single_conver_ocp_write(payload, len/2);
++				IRIS_LOGI("IRIS25_I2C_S_WRITE idx=%d total=%d regs=%d addr=0x%08x rc=%d",
++					i, pcmd_comp->cnt, len/2, len >= 2 ? payload[0] : 0, write_rc);
+ 			}
+ 		}
+ 
