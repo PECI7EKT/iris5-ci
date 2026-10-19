@@ -34,46 +34,18 @@
  void iris_reset_off(void)
 --- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
 +++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
-@@ -820,22 +820,29 @@
- 	usleep_range(3500, 3501);
- }
- 
--static void _iris_plus_reset_mipi(void)
--{
--	struct iris_cfg *pcfg = iris_get_cfg();
--	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
-+static void _iris_plus_reset_mipi(void)
-+{
-+	struct iris_cfg *pcfg = iris_get_cfg();
-+	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
-+
-+	IRIS_LOGI("IRIS27_WAKE_ENTER prev=%d current=%d init=%d i2c=%d",
-+		prev_mode, pcfg->abypss_ctrl.abypass_mode,
-+		pcfg->iris_initialized, pcfg->iris_i2c_switch);
- 
- 	if (prev_mode == ABP_SLEEP_MODE) {
- 		pcfg->iris_initialized = false;
- 		iris_send_one_wired_cmd(IRIS_POWER_UP_SYS);
- 		usleep_range(3500, 3501);
+@@ -831,8 +832,11 @@
  	} else {
--		iris_send_one_wired_cmd(IRIS_POWER_UP_MIPI);
--		usleep_range(3500, 3501);
--	}
--}
--
--static void _iris_pre_config_for_timing(void)
-+		iris_send_one_wired_cmd(IRIS_POWER_UP_MIPI);
-+		usleep_range(3500, 3501);
-+	}
+ 		iris_send_one_wired_cmd(IRIS_POWER_UP_MIPI);
+ 		usleep_range(3500, 3501);
+ 	}
 +	IRIS_LOGI("IRIS27_WAKE_EXIT prev=%d current=%d init=%d",
 +		prev_mode, pcfg->abypss_ctrl.abypass_mode,
 +		pcfg->iris_initialized);
-+}
-+
-+static void _iris_pre_config_for_timing(void)
- {
- 	struct iris_cfg *pcfg = iris_get_cfg();
+ }
  
+ static void _iris_pre_config_for_timing(void)
+ {
 @@ -917,10 +924,14 @@
  	struct iris_cfg *pcfg = iris_get_cfg();
  	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
