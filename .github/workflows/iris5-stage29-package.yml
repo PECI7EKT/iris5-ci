@@ -1,0 +1,60 @@
+name: Iris5 Stage29 - AK3 vendor_dlkm_b-only package plus Stage28 rollback
+on:
+  push:
+    paths:
+      - '.github/workflows/iris5-stage29-package.yml'
+      - 'ci/stage29/make_ak3.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned audited Stage29 image
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39328150075
+          name: iris5-stage29-image-assemble
+          github-token: ${{ github.token }}
+          path: stage29-image
+      - name: Fetch pinned installed Stage28 rollback image
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39291187351
+          name: iris5-stage28-image-assemble
+          github-token: ${{ github.token }}
+          path: stage28-image
+      - name: Fetch pinned original developer AK3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh release download stage20-input -R "${{ github.repository }}" \
+            --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir source
+      - name: Repack strictly vendor_dlkm_b-only and verify both ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          i29=$(find stage29-image -type f -name 'STAGE29-PT-RX-I2C-FIX_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
+          i28=$(find stage28-image -type f -name 'STAGE28-PT-ERRORLOCK-FIX_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
+          test -n "$i29" && test -s "$i29"
+          test -n "$i28" && test -s "$i28"
+          python3 ci/stage29/make_ak3.py \
+            --template 'source/senna-6.6.139-gki+-20261006-2201-ak3.zip' \
+            --stage28-image "$i28" --stage29-image "$i29" \
+            --outdir stage29-packages
+          (cd stage29-packages && sha256sum *.zip > release_zip_sha256.txt)
+          unzip -t stage29-packages/Iris5-Stage29-PT-RX-I2C-vendor_dlkm_b-OrangeFox-AK3.zip | tail -1
+          unzip -t stage29-packages/Iris5-Stage28-ROLLBACK-from-Stage29-OrangeFox-AK3.zip | tail -1
+      - name: Upload two complete OrangeFox AK3 ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage29-AK3-installer-and-stage28-rollback
+          path: stage29-packages/
+          retention-days: 14
+          if-no-files-found: error
