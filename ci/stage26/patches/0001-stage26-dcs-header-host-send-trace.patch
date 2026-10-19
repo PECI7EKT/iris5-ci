@@ -1,0 +1,46 @@
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+@@ -686,4 +686,11 @@
+ 
+-	pheader->stHdr.longCmdFlag = 0x00;
+-	_iris_pt_set_rdcmd_hdr(pheader, dsi_cmd);
++	pheader->stHdr.longCmdFlag = 0x00;
++	_iris_pt_set_rdcmd_hdr(pheader, dsi_cmd);
++	/* Stage26: serialized request, without extra hardware I/O. */
++	IRIS_LOGI("IRIS26_DCS_HEADER addr=0x%08x hdr=0x%08x dtype=0x%02x txlen=%zu data0=0x%02x data1=0x%02x",
++		address, pheader->hdr32, dsi_cmd->msg.type, dsi_cmd->msg.tx_len,
++		(dsi_cmd->msg.tx_buf && dsi_cmd->msg.tx_len > 0) ?
++			((const u8 *)dsi_cmd->msg.tx_buf)[0] : 0xff,
++		(dsi_cmd->msg.tx_buf && dsi_cmd->msg.tx_len > 1) ?
++			((const u8 *)dsi_cmd->msg.tx_buf)[1] : 0xff);
+ 
+@@ -828,5 +835,6 @@
+ {
+-	struct dsi_panel_cmd_set panel_cmds;
+-
+-	memset(&panel_cmds, 0x00, sizeof(panel_cmds));
++	struct dsi_panel_cmd_set panel_cmds;
++	int send_rc;
++
++	memset(&panel_cmds, 0x00, sizeof(panel_cmds));
+ 
+@@ -834,5 +842,8 @@
+ 	panel_cmds.count = cmds_cnt;
+-	panel_cmds.state = DSI_CMD_SET_STATE_HS;
+-	iris_dsi_send_cmds(panel, panel_cmds.cmds,
+-			panel_cmds.count, panel_cmds.state);
++	panel_cmds.state = DSI_CMD_SET_STATE_HS;
++	send_rc = iris_dsi_send_cmds(panel, panel_cmds.cmds,
++			panel_cmds.count, panel_cmds.state);
++	/* Host send success does not imply panel response. */
++	IRIS_LOGI("IRIS26_OCP_HOST_SEND cmds=%u state=%d rc=%d",
++		cmds_cnt, panel_cmds.state, send_rc);
+ 
+@@ -921,4 +932,5 @@
+ 
+-	max_pktsize[0] = (rlen & 0xFF);
+-	memset(&local_cmdset, 0x00, sizeof(local_cmdset));
++	max_pktsize[0] = (rlen & 0xFF);
++	IRIS_LOGI("IRIS26_MAX_RETURN_BYTES requested=%u", rlen);
++	memset(&local_cmdset, 0x00, sizeof(local_cmdset));
+ 
