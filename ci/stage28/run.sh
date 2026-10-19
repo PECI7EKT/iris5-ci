@@ -54,7 +54,7 @@ apply_patches() {
     exit 4
   fi
   git -C "$MOD" diff --binary -- qcom/opensource/display-drivers > "$OUT/diffs/I1_plus_SSC_pt_esd_i2c_host_gpio_ptfix.diff"
-  test -s "$OUT/diffs/I1_plus_SSC_pt_esd_i2c_host_gpio_diag.diff"
+  test -s "$OUT/diffs/I1_plus_SSC_pt_esd_i2c_host_gpio_ptfix.diff"
   grep -qF 'oplus,dsi-pll-ssc-disalbed' "$DR/msm/dsi/dsi_pll.c"
   grep -qF 'PLL SSC disabled by Oplus DT override' "$DR/msm/dsi/dsi_pll.c"
   grep -qF 'IRIS23_DPHY' "$DR/msm/iris/iris5/dsi_iris5_lp.c"
