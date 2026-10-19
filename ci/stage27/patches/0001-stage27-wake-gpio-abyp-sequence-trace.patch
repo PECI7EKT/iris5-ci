@@ -1,0 +1,114 @@
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c
+@@ -157,8 +157,14 @@
+ 	udelay(gpio_cmd_delay);
+ 	spin_unlock_irqrestore(&pcfg->iris_1w_lock, flags);
+ 
+-	udelay(start_end_delay);
+-}
++	udelay(start_end_delay);
++	/* Stage27: GPIO sampled after one-wire timing and spinlock. */
++	IRIS_LOGI("IRIS27_ONEWIRE_DONE type=%d pulses=%d wake_gpio=%d wake_level=%d abyp_gpio=%d abyp_level=%d",
++		type, pulse_count[type], one_wired_gpio,
++		gpio_get_value(one_wired_gpio), pcfg->iris_abyp_ready_gpio,
++		gpio_is_valid(pcfg->iris_abyp_ready_gpio) ?
++			gpio_get_value(pcfg->iris_abyp_ready_gpio) : -1);
++}
+ 
+ int iris_check_abyp_ready(void)
+ {
+@@ -337,7 +343,13 @@
+ 	usleep_range(1000, 1001);
+ 	gpio_set_value(pcfg->iris_reset_gpio, IRIS_GPIO_HIGH);
+ 	usleep_range(2000, 2001);
+-	IRIS_LOGI("%s(), reset end", __func__);
++	IRIS_LOGI("%s(), reset end", __func__);
++	/* Stage27: reset and bypass GPIO levels after reset. */
++	IRIS_LOGI("IRIS27_RESET_DONE gpio=%d level=%d abyp_gpio=%d abyp_level=%d",
++		pcfg->iris_reset_gpio, gpio_get_value(pcfg->iris_reset_gpio),
++		pcfg->iris_abyp_ready_gpio,
++		gpio_is_valid(pcfg->iris_abyp_ready_gpio) ?
++			gpio_get_value(pcfg->iris_abyp_ready_gpio) : -1);
+ }
+ 
+ void iris_reset_off(void)
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
+@@ -820,22 +820,29 @@
+ 	usleep_range(3500, 3501);
+ }
+ 
+-static void _iris_plus_reset_mipi(void)
+-{
+-	struct iris_cfg *pcfg = iris_get_cfg();
+-	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
++static void _iris_plus_reset_mipi(void)
++{
++	struct iris_cfg *pcfg = iris_get_cfg();
++	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
++
++	IRIS_LOGI("IRIS27_WAKE_ENTER prev=%d current=%d init=%d i2c=%d",
++		prev_mode, pcfg->abypss_ctrl.abypass_mode,
++		pcfg->iris_initialized, pcfg->iris_i2c_switch);
+ 
+ 	if (prev_mode == ABP_SLEEP_MODE) {
+ 		pcfg->iris_initialized = false;
+ 		iris_send_one_wired_cmd(IRIS_POWER_UP_SYS);
+ 		usleep_range(3500, 3501);
+ 	} else {
+-		iris_send_one_wired_cmd(IRIS_POWER_UP_MIPI);
+-		usleep_range(3500, 3501);
+-	}
+-}
+-
+-static void _iris_pre_config_for_timing(void)
++		iris_send_one_wired_cmd(IRIS_POWER_UP_MIPI);
++		usleep_range(3500, 3501);
++	}
++	IRIS_LOGI("IRIS27_WAKE_EXIT prev=%d current=%d init=%d",
++		prev_mode, pcfg->abypss_ctrl.abypass_mode,
++		pcfg->iris_initialized);
++}
++
++static void _iris_pre_config_for_timing(void)
+ {
+ 	struct iris_cfg *pcfg = iris_get_cfg();
+ 
+@@ -917,10 +924,14 @@
+ 	struct iris_cfg *pcfg = iris_get_cfg();
+ 	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
+ 
+-	if (prev_mode == ABP_SLEEP_MODE)
+-		return;
+-
+-	_iris_pre_config_for_timing();
++	if (prev_mode == ABP_SLEEP_MODE) {
++		IRIS_LOGI("IRIS27_PRECFG_SKIP prev=%d current=%d init=%d i2c=%d",
++			prev_mode, pcfg->abypss_ctrl.abypass_mode,
++			pcfg->iris_initialized, pcfg->iris_i2c_switch);
++		return;
++	}
++
++	_iris_pre_config_for_timing();
+ }
+ 
+ static void _iris_post_config_for_timing(void)
+@@ -1019,9 +1030,15 @@
+ 	}
+ 	if (iris_is_abyp_timing(&pcfg->panel->cur_mode->timing))
+ 		return false;
+-	/* exit abyp */
+-	abyp_status_gpio = iris_exit_abyp(false);
+-	if (abyp_status_gpio == 0) {
++	/* exit abyp */
++	IRIS_LOGI("IRIS27_EXIT_ATTEMPT n=%d prev=%d current=%d init=%d i2c=%d",
++		4 - toler_cnt, prev_mode, pcfg->abypss_ctrl.abypass_mode,
++		pcfg->iris_initialized, pcfg->iris_i2c_switch);
++	abyp_status_gpio = iris_exit_abyp(false);
++	IRIS_LOGI("IRIS27_EXIT_RESULT n=%d gpio=%d current=%d init=%d",
++		4 - toler_cnt, abyp_status_gpio,
++		pcfg->abypss_ctrl.abypass_mode, pcfg->iris_initialized);
++	if (abyp_status_gpio == 0) {
+ 		_iris_post_config_for_timing();
+ 
+ 		if (prev_mode == ABP_SLEEP_MODE
