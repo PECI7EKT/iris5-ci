@@ -1,0 +1,46 @@
+name: Iris5 AK3 developer reference extraction
+on:
+  push:
+    paths:
+      - '.github/workflows/iris5-ak3-reference-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve and verify original developer AK3 archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reference
+          gh release download stage20-input -R "${{ github.repository }}" \
+            --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir reference
+          echo 'e2b9b423fbcf804e3f6fb4678441e1f0ddc7bee61fccab3d7c2da8e3c7c13237  reference/senna-6.6.139-gki+-20261006-2201-ak3.zip' | sha256sum -c -
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          inp=Path('reference/senna-6.6.139-gki+-20261006-2201-ak3.zip')
+          with ZipFile(inp) as z:
+              names=z.namelist()
+              assert any(x.lower().endswith('anykernel.sh') for x in names), 'No AnyKernel script in reference'
+              assert 'vendor_dlkm.img' in names, 'No vendor_dlkm source'
+              Path('reference/manifest.txt').write_text('\n'.join(names)+'\n')
+              for n in names:
+                  if n.endswith('anykernel.sh') or n.startswith('META-INF/') and n.endswith(('update-binary','updater-script')):
+                      p=Path('reference/scripts')/n
+                      p.parent.mkdir(parents=True,exist_ok=True)
+                      p.write_bytes(z.read(n))
+              print('REFERENCE VERIFIED files=',len(names))
+          PY
+      - name: Upload original AK3 source and scripts (not modified)
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-ak3-developer-reference
+          path: reference/
+          if-no-files-found: error
+          retention-days: 7
