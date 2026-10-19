@@ -40,14 +40,14 @@ supported.vendorpatchlevels=
 
 # This script never modifies boot, dtbo, vendor_boot, recovery or vbmeta.
 BLOCK=/dev/block/mapper/vendor_dlkm_b;
-IS_SLOT_DEVICE=0;
+IS_SLOT_DEVICE=1;
 PATCH_VBMETA_FLAG=0;
 NO_VBMETA_PARTITION_PATCH=1;
 . tools/ak3-core.sh;
 
 # Explicitly constrain writes to the confirmed active _b slot.
-slot="$(find_slot)"
-[ "$slot" = "_b" ] || abort "BLOCKED: active slot is not _b (got $slot)"
+# AK3 setup_ak computes SLOT in the sourced core; find_slot is unavailable in this shell.
+[ "$SLOT" = "_b" ] || abort "BLOCKED: AK3 detected slot '$SLOT' (expected _b)"
 PART=/dev/block/mapper/vendor_dlkm_b
 [ -b "$PART" ] || abort "BLOCKED: vendor_dlkm_b block mapper is absent"
 [ -f "$AKHOME/vendor_dlkm.img" ] || abort "BLOCKED: image absent"
