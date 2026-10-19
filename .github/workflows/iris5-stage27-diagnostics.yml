@@ -1,0 +1,60 @@
+name: Iris5 Stage27 - PT ESD diagnostic logs (OFFLINE)
+on:
+  push:
+    paths:
+      - "ci/stage27/**"
+      - ".github/workflows/iris5-stage27-diagnostics.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify first; build only after verify passes'
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - build
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: iris5-stage27-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  stage27-esd:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout CI scripts
+        uses: actions/checkout@v4
+      - name: Restore pinned foundation for build
+        if: ${{ inputs.mode == 'build' || github.event_name == 'push' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-v2-foundation-8
+          run-id: 39088927882
+          github-token: ${{ github.token }}
+          path: stage18-foundation
+      - name: Verify source pins and check isolated patches
+        run: |
+          set -euo pipefail
+          python3 ci/verify_reference.py
+          bash ci/scripts/fetch_sources.sh
+          bash ci/stage27/run.sh verify
+      - name: Compile Stage27 diagnostic module and validate ABI
+        if: ${{ inputs.mode == 'build' || github.event_name == 'push' }}
+        run: |
+          set -euo pipefail
+          bash ci/stage18/run.sh baseline
+          bash ci/stage27/run.sh build
+      - name: Upload offline diagnostics (NOT flash approval)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage27-${{ inputs.mode }}-${{ github.run_number }}
+          path: ci-out/stage27/
+          if-no-files-found: warn
+          retention-days: 14
