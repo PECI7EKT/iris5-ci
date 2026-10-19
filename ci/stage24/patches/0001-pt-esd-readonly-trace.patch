@@ -1,0 +1,82 @@
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lightup_ocp.c
+@@ -937,5 +937,12 @@
+ 
+-	memset(&local_cmdset, 0x00, sizeof(local_cmdset));
+-
+-	_iris_pt_switch_cmd(panel, &local_cmdset, dsi_cmd);
++	memset(&local_cmdset, 0x00, sizeof(local_cmdset));
++	/* Stage24: log request; this send path cannot confirm delivery. */
++	IRIS_LOGI("IRIS24_TXCMD type=0x%02x opcode=0x%02x tx_len=%zu rx_len=%zu flags=0x%lx state=%d",
++		dsi_cmd->msg.type,
++		(dsi_cmd->msg.tx_buf && dsi_cmd->msg.tx_len) ?
++			((const u8 *)dsi_cmd->msg.tx_buf)[0] : 0xff,
++		dsi_cmd->msg.tx_len, dsi_cmd->msg.rx_len,
++		(unsigned long)dsi_cmd->msg.flags, cmdset->state);
++
++	_iris_pt_switch_cmd(panel, &local_cmdset, dsi_cmd);
+ 
+@@ -1024,4 +1031,8 @@
+ 
+-	if (intstat & IRIS_TX_READ_ERR_MASK) {
+-		rc = -1;
++	IRIS_LOGI("IRIS24_INTSTAT polls=%u max=%d stat=0x%08x received=%d err_masked=0x%08x",
++		(i < retry_cnt) ? (i + 1) : i, retry_cnt, intstat,
++		!!(intstat & IRIS_TX_READ_RESPONSE_RECEIVED),
++		intstat & IRIS_TX_READ_ERR_MASK);
++	if (intstat & IRIS_TX_READ_ERR_MASK) {
++		rc = -1;
+ 		IRIS_LOGE("%s(), Tx read error 0x%x, rc: %d",
+@@ -1030,5 +1041,7 @@
+ 	}
+-	val.pld32 = iris_ocp_read(address, cmdset->state);
+-
+-	rlen = _iris_pt_remove_respond_hdr(val.p, &offset);
++	val.pld32 = iris_ocp_read(address, cmdset->state);
++	IRIS_LOGI("IRIS24_RXDATA addr=0x%08x val=0x%08x first=0x%02x requested=%u state=%d",
++		address, val.pld32, (u8)val.p[0], rlen, cmdset->state);
++
++	rlen = _iris_pt_remove_respond_hdr(val.p, &offset);
+ 	IRIS_LOGV("%s(), read len: %d", __func__, rlen);
+@@ -1081,6 +1094,9 @@
+ 
+-	pcfg = iris_get_cfg();
+-	display = pcfg->display;
+-
+-	dsi_display_clk_ctrl(display->dsi_clk_handle,
++	pcfg = iris_get_cfg();
++	display = pcfg->display;
++	IRIS_LOGI("IRIS24_PANELREAD_START mode=%d type=0x%02x requested=%zu state=%d",
++		pcfg->abypss_ctrl.abypass_mode, cmdset->cmds[0].msg.type,
++		cmdset->cmds[0].msg.rx_len, cmdset->state);
++
++	dsi_display_clk_ctrl(display->dsi_clk_handle,
+ 			DSI_ALL_CLKS, DSI_CLK_ON);
+@@ -1103,6 +1119,7 @@
+ 	}
+-exit:
+-	dsi_display_clk_ctrl(display->dsi_clk_handle,
+-			DSI_ALL_CLKS, DSI_CLK_OFF);
+-	return rc;
++exit:
++	IRIS_LOGI("IRIS24_PANELREAD_END rc=%d", rc);
++	dsi_display_clk_ctrl(display->dsi_clk_handle,
++			DSI_ALL_CLKS, DSI_CLK_OFF);
++	return rc;
+ }
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_ioctl.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_ioctl.c
+@@ -260,6 +260,9 @@
+ 
+-	if (!iris_special_config(type)
+-			&& type != IRIS_ANALOG_BYPASS_MODE
+-			&& !iris_is_pt_mode(pcfg->panel))
+-		return false;
++	if (!iris_special_config(type)
++			&& type != IRIS_ANALOG_BYPASS_MODE
++			&& !iris_is_pt_mode(pcfg->panel)) {
++		IRIS_LOGI("IRIS24_REJECT_TYPE type=%u iris_mode=%d reason=not_PT",
++			type, pcfg->abypss_ctrl.abypass_mode);
++		return false;
++	}
+ 
