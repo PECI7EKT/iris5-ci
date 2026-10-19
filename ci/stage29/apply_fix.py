@@ -56,8 +56,8 @@ replace("read status from confirmed I2C path",
         if (rc)
             return rc;""")
 replace("read PT response packet data with transport check",
-        "\tval.pld32 = iris_ocp_read(address, cmdset->state);",
-        """    rc = _iris_pt_checked_read(address, &val.pld32);
+        "\n\tval.pld32 = iris_ocp_read(address, cmdset->state);",
+        """\n    rc = _iris_pt_checked_read(address, &val.pld32);
     if (rc)
         return rc;""")
 replace("read short response continuation",
