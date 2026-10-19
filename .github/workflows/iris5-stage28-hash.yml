@@ -1,0 +1,37 @@
+name: Iris5 Stage28 - independent compiled artifact hashes
+on:
+  push:
+    paths: ['.github/workflows/iris5-stage28-hash.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  hashes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned compiled Stage28 module
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39289555117
+          name: iris5-stage28--3
+          github-token: ${{ github.token }}
+          path: stage28-source
+      - name: Publish independently verified hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          KO='stage28-source/modules/Stage28_PT_FIX_msm_drm.ko'
+          DIFF='stage28-source/diffs/I1_plus_SSC_pt_esd_i2c_host_gpio_ptfix.diff'
+          test -s "$KO" && test -s "$DIFF"
+          echo 'PINNED_COMPILED_STAGE28_HASHES:'
+          sha256sum "$KO" "$DIFF"
+          echo 'Module digest recorded by the original compiler:'
+          head -1 stage28-source/module_sha256.txt
+          MODULE_SHA=$(sha256sum "$KO" | cut -d' ' -f1)
+          grep -q "^$MODULE_SHA " stage28-source/module_sha256.txt
+          grep -q 'STAGE28_PT_RX_TIMEOUT' "$DIFF"
+          grep -q 'mutex_init(&panel->panel_tx_lock)' "$DIFF"
+          grep -q 'return _iris_pt_write_panel_cmd(panel, cmdset)' "$DIFF"
+          echo 'STAGE28 PINNED HASH AUDIT PASS'
