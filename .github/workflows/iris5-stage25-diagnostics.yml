@@ -31,7 +31,7 @@ jobs:
       - name: Checkout CI scripts
         uses: actions/checkout@v4
       - name: Restore pinned foundation for build
-        if: ${{ inputs.mode == 'build' }}
+        if: ${{ inputs.mode == 'build' || github.event_name == 'push' }}
         uses: actions/download-artifact@v4
         with:
           name: iris5-v2-foundation-8
@@ -45,7 +45,7 @@ jobs:
           bash ci/scripts/fetch_sources.sh
           bash ci/stage25/run.sh verify
       - name: Compile Stage25 diagnostic module and validate ABI
-        if: ${{ inputs.mode == 'build' }}
+        if: ${{ inputs.mode == 'build' || github.event_name == 'push' }}
         run: |
           set -euo pipefail
           bash ci/stage18/run.sh baseline
