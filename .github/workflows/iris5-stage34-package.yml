@@ -1,0 +1,57 @@
+name: Iris5 Stage34 reversible OrangeFox package
+on:
+  push:
+    paths:
+      - '.github/workflows/iris5-stage34-package.yml'
+      - 'release/stage34/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Stage34 candidate image
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39446812549
+          name: iris5-stage34-image
+          github-token: ${{ github.token }}
+          path: stage34-image
+      - name: Fetch exact Stage33 image for rollback
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39427662052
+          name: iris5-stage33-image-assemble
+          github-token: ${{ github.token }}
+          path: stage33-image
+      - name: Fetch pinned AK3 template
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh release download stage20-input -R "${{ github.repository }}" --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir source
+      - name: Verify images and assemble install plus rollback
+        run: |
+          set -euo pipefail
+          image34=$(find stage34-image -type f -name 'STAGE34-IRQ-OBSERVE_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
+          image33=$(find stage33-image -type f -name 'STAGE33-OPTIN-DSI-PULSE_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
+          test -s "$image34" && test -s "$image33"
+          echo 'a57e5562c4e8a2eef90e2cb69759e10339353afac9657537e98ac7643a01c087  '"$image34" | sha256sum -c -
+          echo '4860d8e8aebed0d97b62db4600a0717e72df7f9a2bec3b94f4fa2ec040b2b991  '"$image33" | sha256sum -c -
+          python3 release/stage34/make_ak3.py --template 'source/senna-6.6.139-gki+-20261006-2201-ak3.zip' --stage33-image "$image33" --stage34-image "$image34" --stage34-sha a57e5562c4e8a2eef90e2cb69759e10339353afac9657537e98ac7643a01c087 --outdir stage34-packages
+          (cd stage34-packages && sha256sum *.zip > release_zip_sha256.txt)
+          unzip -t stage34-packages/Iris5-Stage34-IRQ-OBSERVE-OrangeFox-AK3.zip | tail -1
+          unzip -t stage34-packages/Iris5-Stage33-ROLLBACK-from-Stage34-OrangeFox-AK3.zip | tail -1
+      - name: Publish install and rollback packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage34-install-and-rollback
+          path: stage34-packages/
+          if-no-files-found: warn
+          retention-days: 14
