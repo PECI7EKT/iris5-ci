@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed stage34 vendor_dlkm_b ONLY OrangeFox/AK3 packaging from developer template.
+"""Fail-closed stage35 vendor_dlkm_b ONLY OrangeFox/AK3 packaging from developer template.
 
 No boot/DTBO/vendor_boot payloads or flashing operations are present. The only write
 is an explicit dd to /dev/block/mapper/vendor_dlkm_b guarded by pre/post SHA256.
@@ -133,12 +133,12 @@ def main():
     out.mkdir(parents=True,exist_ok=True)
     build(base,new,STAGE34_SHA,stage35_sha,"STAGE35-RDPTR-TE-DIAG",
           out/"Iris5-Stage35-RDPTR-TE-DIAG-OrangeFox-AK3.zip")
-    build(base,old,stage35_sha,STAGE34_SHA,"ROLLBACK-STAGE33",
+    build(base,old,stage35_sha,STAGE34_SHA,"ROLLBACK-STAGE34",
           out/"Iris5-Stage34-ROLLBACK-from-Stage35-OrangeFox-AK3.zip")
     (out/"images.sha256").write_text(
          stage35_sha+"  STAGE35 vendor_dlkm_b image\n"+
-         STAGE34_SHA+"  STAGE33 installed rollback image\n")
-    print("STAGE35 INSTALL+STAGE33 ROLLBACK ZIP VERIFIED. Not runtime tested.")
+         STAGE34_SHA+"  STAGE34 installed rollback image\n")
+    print("STAGE35 INSTALL+STAGE34 ROLLBACK ZIP VERIFIED. Not runtime tested.")
 
 if __name__=="__main__":
     main()
