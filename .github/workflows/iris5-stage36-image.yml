@@ -1,0 +1,48 @@
+name: Iris5 Stage36 RDPTR telemetry EROFS image build
+on:
+  push:
+    paths:
+      - '.github/workflows/iris5-stage36-image.yml'
+      - 'ci/stage36/repack.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Stage36 module
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39459692406
+          name: iris5-stage36--1
+          github-token: ${{ github.token }}
+          path: stage36-source
+      - name: Fetch developer archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh release download stage20-input -R "${{ github.repository }}" --pattern 'senna-6.6.139-gki+-20261006-2201-ak3.zip' --dir source
+      - name: EROFS/SELinux audit
+        env:
+          STAGE36_IMAGE_MODE: audit
+        run: bash ci/stage36/repack.sh
+      - name: Reset EROFS builder workspace
+        run: sudo rm -rf .ci-tools/erofs-utils work
+      - name: Assemble candidate
+        env:
+          STAGE36_IMAGE_MODE: assemble
+        run: bash ci/stage36/repack.sh
+      - name: Upload audit and candidate image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage36-image
+          path: stage36-image-output/
+          if-no-files-found: warn
+          retention-days: 14
