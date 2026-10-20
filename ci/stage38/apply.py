@@ -108,7 +108,7 @@ t=one("cache_skip",t,'''\
 \t\tIRIS_LOGI("%s Same bypass mode: %d", __func__, mode);
 \t\treturn;
 \t}''')
-for expected in ("iris38_hw_state_get", "module_param_cb(iris38_hw_state", "IRIS38_ABYP_REQUEST", "IRIS38_ABYP_RESULT"):
+for expected in ("static int iris38_hw_state_get", "module_param_cb(iris38_hw_state", "IRIS38_ABYP_REQUEST", "IRIS38_ABYP_RESULT"):
     if s.count(expected)!=1: raise SystemExit("BLOCKED: missing lp marker "+expected)
 if t.count("IRIS38_CACHE_SKIP")!=1: raise SystemExit("BLOCKED: missing ioctl marker")
 p.write_text(s); q.write_text(t)
