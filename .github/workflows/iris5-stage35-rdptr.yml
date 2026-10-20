@@ -3,7 +3,7 @@ on:
   push:
     paths:
       - "ci/stage35/**"
-      - ".github/workflows/iris5-stage35-irq-observe.yml"
+      - ".github/workflows/iris5-stage35-rdptr.yml"
   workflow_dispatch:
     inputs:
       mode:
