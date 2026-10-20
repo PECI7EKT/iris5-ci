@@ -1,0 +1,3 @@
+# Stage37 candidate. Exact keys only; never grant the full vendor.iris namespace.
+vendor.iris.sdr2hdr.cmd   u:object_r:vendor_iris_sdr2hdr_prop:s0 exact string
+vendor.iris.sdr2hdr.state u:object_r:vendor_iris_sdr2hdr_prop:s0 exact string
