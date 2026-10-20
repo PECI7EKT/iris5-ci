@@ -1,0 +1,3 @@
+# Stage37 candidate for device/realme/senna/sepolicy/vendor/property.te
+# Audit pre-existing declarations to avoid duplicates.
+vendor_internal_prop(vendor_iris_sdr2hdr_prop)
