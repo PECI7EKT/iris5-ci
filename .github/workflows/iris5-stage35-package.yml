@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           image34=$(find stage35-image -type f -name 'STAGE35-RDPTR-TE-DIAG_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
-          image33=$(find stage34-image -type f -name 'STAGE34-OPTIN-DSI-PULSE_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
+          image33=$(find stage34-image -type f -name 'STAGE34-IRQ-OBSERVE_VENDOR_DLKM_B_OFFLINE_ONLY.img' | head -1)
           test -s "$image34" && test -s "$image33"
           echo '1f8583c5418f677fb5ec680cd9c9be3d3c7c76016575c2e667116c7627c2ca58  '"$image34" | sha256sum -c -
           echo 'a57e5562c4e8a2eef90e2cb69759e10339353afac9657537e98ac7643a01c087  '"$image33" | sha256sum -c -
