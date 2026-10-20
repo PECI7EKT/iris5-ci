@@ -32,6 +32,8 @@ jobs:
         env:
           STAGE34_IMAGE_MODE: audit
         run: bash ci/stage34/repack.sh
+      - name: Reset EROFS builder workspace
+        run: sudo rm -rf .ci-tools/erofs-utils work
       - name: Assemble candidate
         env:
           STAGE34_IMAGE_MODE: assemble
