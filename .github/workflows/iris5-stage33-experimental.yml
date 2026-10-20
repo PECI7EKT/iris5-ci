@@ -1,9 +1,9 @@
-name: Iris5 Stage33 - PT ESD diagnostic logs (OFFLINE)
+name: Iris5 Stage33 - OPT-IN post-reset DSI clock pulse prototype (OFFLINE)
 on:
   push:
     paths:
       - "ci/stage33/**"
-      - ".github/workflows/iris5-stage33-diagnostics.yml"
+      - ".github/workflows/iris5-stage33-experimental.yml"
   workflow_dispatch:
     inputs:
       mode:
