@@ -133,8 +133,8 @@ def main():
     build(base,old,stage33_sha,STAGE29_SHA,"ROLLBACK-STAGE29",
           out/"Iris5-Stage29-ROLLBACK-from-Stage33-OrangeFox-AK3.zip")
     (out/"images.sha256").write_text(
-         stage33_sha+"  STAGE33 vendor_dlkm_b image\\n"+
-         STAGE29_SHA+"  STAGE29 installed rollback image\\n")
+         stage33_sha+"  STAGE33 vendor_dlkm_b image\n"+
+         STAGE29_SHA+"  STAGE29 installed rollback image\n")
     print("STAGE33 INSTALL+STAGE29 ROLLBACK ZIP VERIFIED. Not runtime tested.")
 
 if __name__=="__main__":
