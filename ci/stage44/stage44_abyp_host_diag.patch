@@ -1,0 +1,619 @@
+diff --git a/qcom/opensource/display-drivers/msm/dsi/dsi_clk_manager.c b/qcom/opensource/display-drivers/msm/dsi/dsi_clk_manager.c
+index 3da5dba..e27ead3 100644
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_clk_manager.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_clk_manager.c
+@@ -10,6 +10,7 @@
+ #include <linux/pm_runtime.h>
+ #include "dsi_clk.h"
+ #include "dsi_defs.h"
++#include "../iris_host_diag.h"
+ 
+ struct dsi_core_clks {
+ 	struct dsi_core_clk_info clks;
+@@ -649,9 +650,11 @@ static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
+ 	}
+ 
+ 	if (l_type & DSI_LINK_HS_CLK) {
++		iris44_diag(IRIS44_HS_ENABLE, mngr->priv_data, master_ndx, ctrl_count, l_type, mngr->is_cont_splash_enabled, mngr->phy_pll_bypass, 0);
+ 		if (!mngr->is_cont_splash_enabled) {
+-			mngr->phy_config_cb(mngr->priv_data, true);
+-			mngr->phy_pll_toggle_cb(mngr->priv_data, true);
++			iris44_diag(IRIS44_HOST_CFG_IN, mngr->priv_data, master_ndx, ctrl_count, l_type, 0, 0, 0);
++			iris44_diag_rc(IRIS44_HOST_CFG_OUT, mngr->priv_data, mngr->phy_config_cb(mngr->priv_data, true));
++			iris44_diag_rc(IRIS44_HOST_PLL_OUT, mngr->priv_data, mngr->phy_pll_toggle_cb(mngr->priv_data, true));
+ 		}
+ 		rc = dsi_link_hs_clk_start(&m_clks->hs_clks,
+ 			DSI_LINK_CLK_START, master_ndx);
+@@ -1151,6 +1154,8 @@ int dsi_clk_req_state(void *client, enum dsi_clk_type clk,
+ 
+ 	mngr = c->mngr;
+ 	mutex_lock(&mngr->clk_mutex);
++	iris44_diag(IRIS44_CLK_REQ_IN, mngr->priv_data, clk, state, c->core_refcount, c->link_refcount,
++		IRIS44_STATES(c->core_clk_state, c->link_clk_state, mngr->core_clk_state, mngr->link_clk_state), 0);
+ 
+ 	DSI_DEBUG("[%s]%s: CLK=%d, new_state=%d, core=%d, linkl=%d\n",
+ 	       mngr->name, c->name, clk, state, c->core_clk_state,
+@@ -1230,6 +1235,8 @@ int dsi_clk_req_state(void *client, enum dsi_clk_type clk,
+ 			DSI_ERR("Failed to adjust clock state rc = %d\n", rc);
+ 	}
+ 
++	iris44_diag(IRIS44_CLK_REQ_OUT, mngr->priv_data, clk, state, c->core_refcount, c->link_refcount,
++		IRIS44_STATES(c->core_clk_state, c->link_clk_state, mngr->core_clk_state, mngr->link_clk_state), rc);
+ 	mutex_unlock(&mngr->clk_mutex);
+ 	return rc;
+ }
+diff --git a/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c b/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c
+index c3b6fab..b7d3ef4 100644
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c
+@@ -13,6 +13,7 @@
+ #include "msm_drv.h"
+ #include "msm_kms.h"
+ #include "dsi_phy.h"
++#include "../iris_host_diag.h"
+ #include "dsi_phy_hw.h"
+ #include "dsi_clk.h"
+ #include "dsi_pwr.h"
+@@ -842,9 +843,12 @@ int dsi_phy_configure(struct msm_dsi_phy *phy, bool commit)
+ 	phy->pll->type = phy->cfg.phy_type;
+ 	phy->pll->bpp = dsi_pixel_format_to_bpp(phy->dst_format);
+ 	phy->pll->lanes = dsi_phy_get_data_lanes_count(phy);
++	iris44_diag(IRIS44_PHY_CFG_IN, phy, commit, phy->pll->bpp, phy->pll->lanes,
++		phy->pll->byteclk_rate, phy->pll->pclk_rate, 0);
+ 
+ 	if (phy->hw.ops.configure)
+ 		rc = phy->hw.ops.configure(phy->pll, commit);
++	iris44_diag(IRIS44_PHY_CFG_OUT, phy, rc, commit, 0, 0, 0, 0);
+ 
+ 	return rc;
+ }
+@@ -956,7 +960,7 @@ void dsi_phy_reset_clk_en_sel(struct msm_dsi_phy *phy)
+ 	phy->hw.ops.reset_clk_en_sel(&phy->hw);
+ }
+ 
+-int dsi_phy_set_ulps(struct msm_dsi_phy *phy, struct dsi_host_config *config,
++static int _iris44_dsi_phy_set_ulps(struct msm_dsi_phy *phy, struct dsi_host_config *config,
+ 		bool enable, bool clamp_enabled)
+ {
+ 	int rc = 0;
+@@ -995,6 +999,18 @@ error:
+ 	return rc;
+ }
+ 
++
++int dsi_phy_set_ulps(struct msm_dsi_phy *phy, struct dsi_host_config *config,
++		bool enable, bool clamp_enabled)
++{
++	int result;
++
++	iris44_diag(IRIS44_ULPS_IN, phy, enable, clamp_enabled, 0, 0, 0, 0);
++	result = _iris44_dsi_phy_set_ulps(phy, config, enable, clamp_enabled);
++	iris44_diag(IRIS44_ULPS_OUT, phy, enable, clamp_enabled, result, 0, 0, 0);
++	return result;
++}
++
+ /**
+  * dsi_phy_enable() - enable DSI PHY hardware
+  * @dsi_phy:            DSI PHY handle.
+diff --git a/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c b/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
+index dbac6f4..8de7dbf 100644
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
+@@ -11,6 +11,7 @@
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include "dsi_pll_5nm.h"
++#include "../iris_host_diag.h"
+ 
+ #define VCO_DELAY_USEC 1
+ 
+@@ -1596,6 +1597,8 @@ int dsi_pll_5nm_configure(void *pll, bool commit)
+ 	struct dsi_pll_resource *rsc = (struct dsi_pll_resource *)pll;
+ 
+ 	dsi_pll_config_slave(rsc);
++	iris44_diag(IRIS44_PLL_CFG_IN, rsc, rsc->index, commit, rsc->ssc_en,
++		rsc->byteclk_rate, rsc->pclk_rate, 0);
+ 
+ 	/* PLL power needs to be enabled before accessing PLL registers */
+ 	dsi_pll_enable_pll_bias(rsc);
+@@ -1623,6 +1626,7 @@ int dsi_pll_5nm_configure(void *pll, bool commit)
+ 			!!(ssc_ctrl & SSC_EN), rc);
+ 	}
+ 
++	iris44_diag(IRIS44_PLL_CFG_OUT, rsc, rsc->index, commit, rc, 0, 0, 0);
+ 	return 0;
+ }
+ 
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c
+index 77c4251..972931e 100644
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_gpio.c
+@@ -18,6 +18,7 @@
+ #include "dsi_iris5_lightup.h"
+ #include "dsi_iris5_gpio.h"
+ #include "dsi_iris5_log.h"
++#include "../../iris_host_diag.h"
+ 
+ 
+ #define IRIS_GPIO_HIGH 1
+@@ -328,6 +329,8 @@ void iris_reset_chip(void)
+ 	int rc = 0;
+ 	struct iris_cfg *pcfg = iris_get_cfg();
+ 
++	iris44_diag(IRIS44_RESET_CALL, pcfg, 0, 0, 0, 0, 0, 0);
++
+ 	if (!gpio_is_valid(pcfg->iris_reset_gpio))
+ 		return;
+ 
+@@ -343,6 +346,7 @@ void iris_reset_chip(void)
+ 	usleep_range(1000, 1001);
+ 	gpio_set_value(pcfg->iris_reset_gpio, IRIS_GPIO_HIGH);
+ 	usleep_range(2000, 2001);
++	iris44_diag(IRIS44_RESET_DONE, pcfg, 0, 0, 0, 0, 0, 0);
+ 	IRIS_LOGI("%s(), reset end", __func__);
+ 	/* Stage27: reset and bypass GPIO levels after reset. */
+ 	IRIS_LOGI("IRIS27_RESET_DONE gpio=%d level=%d abyp_gpio=%d abyp_level=%d",
+diff --git a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
+index 8c227bc..f0c8389 100755
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
+@@ -25,6 +25,11 @@
+ #include "dsi_clk.h"
+ #include <linux/err.h>
+ #include <linux/moduleparam.h>
++#include <linux/interrupt.h>
++#include <linux/ktime.h>
++#include <linux/sched.h>
++#include <linux/spinlock.h>
++#include "../../iris_host_diag.h"
+ 
+ #define DEBUG_READ_PMU
+ #define DEFAULT_ABYP_LP_MODE ABYP_POWER_DOWN_PLL
+@@ -45,6 +50,196 @@ static bool iris_lce_power;
+ static bool iris_bsram_power; /* BSRAM domain power status */
+ /* Experimental Stage33, disabled until intentionally enabled by root. */
+ static bool iris33_postreset_pulse;
++
++/* Stage44: no printk, allocations, MMIO or hardware control in this observer. */
++static bool iris44_host_diag;
++module_param_named(iris44_host_diag, iris44_host_diag, bool, 0600);
++MODULE_PARM_DESC(iris44_host_diag, "Stage44 bounded ABYP host trace (default OFF)");
++
++#define IRIS44_WINDOW_NS (8ULL * NSEC_PER_SEC)
++static DEFINE_SPINLOCK(iris44_diag_lock);
++static struct {
++	u64 next_op, op, start_ns, rate_ns;
++	int owner;
++	u32 attempt, seq, major_used, host_used;
++	u32 major_dropped, host_dropped, overlap, suppressed;
++	u32 starts_rate, major_rate, host_rate;
++	bool active, dump;
++} iris44_state;
++
++static void iris44_rate_locked(u64 now)
++{
++	if (now - iris44_state.rate_ns >= NSEC_PER_SEC) {
++		iris44_state.rate_ns = now;
++		iris44_state.starts_rate = 0;
++		iris44_state.major_rate = 0;
++		iris44_state.host_rate = 0;
++	}
++}
++
++static void iris44_record_locked(struct iris44_record *r, u64 now,
++	u32 event, const void *ctx, s64 v0, s64 v1, s64 v2,
++	s64 v3, s64 v4, s64 v5)
++{
++	*r = (struct iris44_record) {
++		.op = iris44_state.op, .ns = now, .seq = ++iris44_state.seq,
++		.attempt = iris44_state.attempt, .event = event,
++		.owner = iris44_state.owner, .pid = task_pid_nr(current),
++		.dropped = iris44_state.major_dropped + iris44_state.host_dropped,
++		.overlap = iris44_state.overlap, .suppressed = iris44_state.suppressed, .ctx = ctx,
++		.v0 = v0, .v1 = v1, .v2 = v2, .v3 = v3, .v4 = v4, .v5 = v5,
++	};
++}
++
++u64 iris44_diag_begin(const void *ctx, int mode)
++{
++	struct iris44_record r;
++	unsigned long flags;
++	u64 now;
++
++	if (!READ_ONCE(iris44_host_diag) || !trace_iris44_host_enabled() ||
++	    in_interrupt() || irqs_disabled())
++		return 0;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	now = ktime_get_ns();
++	iris44_rate_locked(now);
++	if (iris44_state.active) {
++		iris44_state.overlap++;
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return 0;
++	}
++	if (iris44_state.starts_rate >= 2) {
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return 0;
++	}
++	iris44_state.starts_rate++;
++	iris44_state.op = ++iris44_state.next_op;
++	iris44_state.owner = task_pid_nr(current);
++	iris44_state.start_ns = now;
++	iris44_state.attempt = 0;
++	iris44_state.seq = 0;
++	iris44_state.major_used = 0;
++	iris44_state.host_used = 0;
++	iris44_state.major_dropped = 0;
++	iris44_state.host_dropped = 0;
++	iris44_state.overlap = 0;
++	iris44_state.suppressed = 0;
++	iris44_state.dump = false;
++	iris44_state.active = true;
++	iris44_record_locked(&r, now, IRIS44_BEGIN, ctx, mode, 0, 0, 0, 0, 0);
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	trace_iris44_host(&r);
++	return r.op;
++}
++
++void iris44_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5)
++{
++	struct iris44_record r;
++	unsigned long flags;
++	u64 now;
++	bool host = event >= IRIS44_CLK_REQ_IN;
++
++	if (!READ_ONCE(iris44_host_diag) || !trace_iris44_host_enabled() ||
++	    in_interrupt() || irqs_disabled())
++		return;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (!iris44_state.active) {
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	/* Do not let the owner's 80-register failure dump consume the host budget.
++	 * Other tasks remain observable; standard CCF trace can cover the dump itself.
++	 */
++	if (host && iris44_state.dump && iris44_state.owner == task_pid_nr(current)) {
++		iris44_state.suppressed++;
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	now = ktime_get_ns();
++	iris44_rate_locked(now);
++	if (now - iris44_state.start_ns >= IRIS44_WINDOW_NS ||
++	    (host && (iris44_state.host_rate >= 128 || iris44_state.host_used >= 256)) ||
++	    (!host && (iris44_state.major_rate >= 128 || iris44_state.major_used >= 128))) {
++		if (host)
++			iris44_state.host_dropped++;
++		else
++			iris44_state.major_dropped++;
++		iris44_state.seq++;
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	if (host) {
++		iris44_state.host_rate++;
++		iris44_state.host_used++;
++	} else {
++		iris44_state.major_rate++;
++		iris44_state.major_used++;
++	}
++	iris44_record_locked(&r, now, event, ctx, v0, v1, v2, v3, v4, v5);
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	trace_iris44_host(&r);
++}
++
++void iris44_diag_attempt(u32 attempt)
++{
++	unsigned long flags;
++	bool owner = false;
++
++	if (!READ_ONCE(iris44_host_diag) || in_interrupt() || irqs_disabled())
++		return;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (iris44_state.active && iris44_state.owner == task_pid_nr(current)) {
++		iris44_state.attempt = attempt;
++		owner = true;
++	}
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	if (owner)
++		iris44_diag(IRIS44_ATTEMPT, NULL, attempt, 0, 0, 0, 0, 0);
++}
++
++void iris44_diag_dump(bool active)
++{
++	unsigned long flags;
++	bool owner = false;
++
++	if (!READ_ONCE(iris44_host_diag) || in_interrupt() || irqs_disabled())
++		return;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (iris44_state.active && iris44_state.owner == task_pid_nr(current)) {
++		iris44_state.dump = active;
++		owner = true;
++	}
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	if (owner)
++		iris44_diag(active ? IRIS44_DUMP_IN : IRIS44_DUMP_OUT, NULL, 0, 0, 0, 0, 0, 0);
++}
++
++void iris44_diag_end(u64 op, const void *ctx, int result)
++{
++	struct iris44_record r;
++	unsigned long flags;
++	u64 now;
++
++	if (!op || in_interrupt() || irqs_disabled())
++		return;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (!iris44_state.active || iris44_state.op != op ||
++	    iris44_state.owner != task_pid_nr(current)) {
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	now = ktime_get_ns();
++	iris44_record_locked(&r, now, IRIS44_END, ctx, result,
++		iris44_state.major_dropped, iris44_state.host_dropped,
++		now - iris44_state.start_ns >= IRIS44_WINDOW_NS,
++		iris44_state.major_used, iris44_state.host_used);
++	iris44_state.active = false;
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	if (READ_ONCE(iris44_host_diag) && trace_iris44_host_enabled())
++		trace_iris44_host(&r);
++}
++
+ module_param_named(iris33_postreset_pulse, iris33_postreset_pulse, bool, 0600);
+ MODULE_PARM_DESC(iris33_postreset_pulse, "Stage33 test post-reset DSI pulse (default OFF)");
+ 
+@@ -628,6 +823,7 @@ static void iris_mipi_abyp_switch(bool enter_abyp)
+ 		IRIS_LOGD("%s, Enter ABYP.", __func__);
+ 	} else {
+ 		IRIS_LOGI("IRIS23_SYS5 transport=%s", (pcfg && pcfg->iris_i2c_switch) ? "i2c" : "dsi");
++		iris44_diag(IRIS44_SYS5_BEGIN, pcfg, pcfg && pcfg->iris_i2c_switch, 0, 0, 0, 0, 0);
+ 		if (pcfg && pcfg->iris_i2c_switch) {
+ 			iris_send_ipopt_cmds_i2c(IRIS_IP_SYS, 5);
+ 			udelay(1000);
+@@ -635,6 +831,7 @@ static void iris_mipi_abyp_switch(bool enter_abyp)
+ 			iris_send_ipopt_cmds(IRIS_IP_SYS, 5);
+ 		}
+ 		IRIS_LOGD("%s, Exit ABYP.", __func__);
++		iris44_diag(IRIS44_SYS5_END, pcfg, 0, 0, 0, 0, 0, 0);
+ 	}
+ }
+ 
+@@ -651,6 +848,7 @@ static int _iris_dphy_itf_check(bool aux_channel)
+ 	while (i < 10) {
+ 		arr[0] = dphy_itf_ctrl;
+ 		ret = iris_i2c_conver_ocp_read(arr, 1, false);
++		iris44_diag(IRIS44_DPHY_POLL, NULL, dphy_itf_ctrl, i, ret, ret ? 0 : arr[0], !ret, aux_channel);
+ 		if (ret) {
+ 			IRIS_LOGE("%s, i2c read [0x%x] fail, ret = %d", __func__,
+ 				dphy_itf_ctrl, ret);
+@@ -836,6 +1034,7 @@ static void _iris_plus_reset_mipi(void)
+ 	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
+ 
+ 	IRIS_LOGI("IRIS23_WAKE prev_mode=%d i2c=%d initialized=%d", prev_mode, pcfg->iris_i2c_switch, pcfg->iris_initialized);
++	iris44_diag(IRIS44_WAKE, pcfg, prev_mode, pcfg->iris_i2c_switch, pcfg->iris_initialized, 0, 0, 0);
+ 	if (prev_mode == ABP_SLEEP_MODE) {
+ 		pcfg->iris_initialized = false;
+ 		iris_send_one_wired_cmd(IRIS_POWER_UP_SYS);
+@@ -935,6 +1134,7 @@ static void _iris_plus_pre_config_for_timing(void)
+ 		IRIS_LOGI("IRIS27_PRECFG_SKIP prev=%d current=%d init=%d i2c=%d",
+ 			prev_mode, pcfg->abypss_ctrl.abypass_mode,
+ 			pcfg->iris_initialized, pcfg->iris_i2c_switch);
++		iris44_diag(IRIS44_PRECFG_SKIP, pcfg, prev_mode, pcfg->iris_initialized, pcfg->iris_i2c_switch, 0, 0, 0);
+ 		return;
+ 	}
+ 
+@@ -1064,15 +1264,19 @@ static bool _iris_plus_cmd_abyp_exit_impl(int mode, struct dsi_display *display)
+ 	int prev_mode = pcfg->abypss_ctrl.abypass_mode;
+ 
+ exit_abyp_loop:
++	iris44_diag_attempt(4 - toler_cnt);
+ 	if (!pcfg->iris_i2c_switch) {
+ 		IRIS_LOGI("Exit abyp mode start");
+ 		pcfg->abyp_ops.mipi_reset();
+ 		pcfg->abyp_ops.pre_config_for_timing();
+ 	}
+ 	if (prev_mode == ABP_SLEEP_MODE) {
++		iris44_diag(IRIS44_WAIT_UNLOCK, pcfg->panel, 0, 0, 0, 0, 0, 0);
+ 		mutex_unlock(&pcfg->panel->panel_lock);
+ 		_iris_wait_prev_frame_done();
++		iris44_diag(IRIS44_WAIT_RETURN, pcfg->panel, 0, 0, 0, 0, 0, 0);
+ 		mutex_lock(&pcfg->panel->panel_lock);
++		iris44_diag(IRIS44_PANEL_RELOCK, pcfg->panel, 0, 0, 0, 0, 0, 0);
+ 	}
+ 	if (iris_is_abyp_timing(&pcfg->panel->cur_mode->timing))
+ 		return false;
+@@ -1098,7 +1302,9 @@ exit_abyp_loop:
+ 	}
+ 
+ 	if (abyp_status_gpio) {
++		iris44_diag_dump(true);
+ 		iris_dump_status();
++		iris44_diag_dump(false);
+ 		if (toler_cnt > 0) {
+ 			IRIS_LOGW("Exit abyp retry, %d", toler_cnt);
+ 			iris_reset_chip();
+@@ -1135,6 +1341,7 @@ static bool _iris_cmd_abyp_exit(int mode)
+ 		ktime0 = ktime_get();
+ 
+ exit_abyp_loop:
++	iris44_diag_attempt(4 - toler_cnt);
+ 	if (!pcfg->iris_i2c_switch) {
+ 		IRIS_LOGI("Exit abyp mode start");
+ 		_iris_reset_mipi();
+@@ -1175,7 +1382,9 @@ exit_abyp_loop:
+ 		return true;
+ 	}
+ 	if (abyp_status_gpio != 0) {
++		iris44_diag_dump(true);
+ 		iris_dump_status();
++		iris44_diag_dump(false);
+ 		if (toler_cnt > 0) {
+ 			IRIS_LOGW("Exit abyp retry, %d", toler_cnt);
+ 			iris_reset_chip();
+@@ -1303,7 +1512,7 @@ static int _iris_abyp_select(int dest_mode)
+ 
+ /* Switch PT and Bypass mode */
+ /* Return: true is PT, false is Bypass */
+-bool iris_abypass_switch_proc(struct dsi_display *display, int mode, bool pending, bool first)
++static bool _iris44_abypass_switch_proc(struct dsi_display *display, int mode, bool pending, bool first)
+ {
+ 	ktime_t ktime0 = 0;
+ 	int dest_mode = mode & PT_ABP_MASK; //obtain pt or abyp mode
+@@ -1388,6 +1597,17 @@ bool iris_abypass_switch_proc(struct dsi_display *display, int mode, bool pendin
+ 	return pt_mode;
+ }
+ 
++
++bool iris_abypass_switch_proc(struct dsi_display *display, int mode, bool pending, bool first)
++{
++	u64 op = (!pending && (mode & PT_ABP_MASK) == PASS_THROUGH_MODE) ?
++		iris44_diag_begin(display, mode) : 0;
++	bool result = _iris44_abypass_switch_proc(display, mode, pending, first);
++
++	iris44_diag_end(op, display, result);
++	return result;
++}
++
+ void iris_abyp_lp(int mode)
+ {
+ 	int abyp_status_gpio;
+@@ -1419,6 +1639,8 @@ int iris_exit_abyp(bool one_wired)
+ 	{
+ 		int dphy_rc = _iris_dphy_itf_check(false);
+ 
++		iris44_diag(IRIS44_DPHY_DONE, NULL, dphy_rc, one_wired, 0, 0, 0, 0);
++
+ 		IRIS_LOGI("IRIS23_EXIT dphy_rc=%d one_wired=%d", dphy_rc, one_wired);
+ 	}
+ 	/* try to exit abyp */
+@@ -1435,6 +1657,7 @@ int iris_exit_abyp(bool one_wired)
+ 	for (i = 0; i < 10; i++) {
+ 		abyp_status_gpio = iris_check_abyp_ready();
+ 		IRIS_LOGD("%s, ABYP status: %d.", __func__, abyp_status_gpio);
++		iris44_diag(IRIS44_GPIO_POLL, NULL, i, abyp_status_gpio, 0, 0, 0, 0);
+ 		if (abyp_status_gpio == 0)
+ 			break;
+ 		usleep_range(3500, 3501);
+diff --git a/qcom/opensource/display-drivers/msm/iris_host_diag.h b/qcom/opensource/display-drivers/msm/iris_host_diag.h
+new file mode 100644
+index 0000000..ce049f2
+--- /dev/null
++++ b/qcom/opensource/display-drivers/msm/iris_host_diag.h
+@@ -0,0 +1,62 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _IRIS44_HOST_DIAG_H_
++#define _IRIS44_HOST_DIAG_H_
++#include <linux/types.h>
++
++/* Window correlation, not proof of causal ownership of another task's events. */
++enum iris44_event {
++	IRIS44_BEGIN = 1, IRIS44_END, IRIS44_ATTEMPT,
++	IRIS44_WAKE, IRIS44_PRECFG_SKIP,
++	IRIS44_WAIT_UNLOCK, IRIS44_WAIT_RETURN, IRIS44_PANEL_RELOCK,
++	IRIS44_RESET_CALL, IRIS44_RESET_LOW_DONE, IRIS44_RESET_DONE,
++	IRIS44_DPHY_POLL, IRIS44_DPHY_DONE,
++	IRIS44_SYS5_BEGIN, IRIS44_SYS5_END, IRIS44_GPIO_POLL,
++	IRIS44_DUMP_IN, IRIS44_DUMP_OUT,
++	IRIS44_CLK_REQ_IN = 128, IRIS44_CLK_REQ_OUT,
++	IRIS44_HOST_CFG_IN, IRIS44_HOST_CFG_OUT, IRIS44_HOST_PLL_OUT,
++	IRIS44_PHY_CFG_IN, IRIS44_PHY_CFG_OUT,
++	IRIS44_PLL_CFG_IN, IRIS44_PLL_CFG_OUT,
++	IRIS44_ULPS_IN, IRIS44_ULPS_OUT,
++	IRIS44_HS_ENABLE,
++};
++
++struct iris44_record {
++	u64 op, ns;
++	u32 seq, attempt, event, dropped, overlap, suppressed;
++	int owner, pid;
++	const void *ctx;
++	s64 v0, v1, v2, v3, v4, v5;
++};
++
++/* Four protected clock-manager state bytes, no register accesses. */
++#define IRIS44_STATES(cc, cl, mc, ml) \
++	((u32)(cc) | ((u32)(cl) << 8) | ((u32)(mc) << 16) | ((u32)(ml) << 24))
++
++#if defined(CONFIG_PXLW_IRIS)
++u64 iris44_diag_begin(const void *ctx, int mode);
++void iris44_diag_end(u64 op, const void *ctx, int result);
++void iris44_diag_attempt(u32 attempt);
++void iris44_diag_dump(bool active);
++void iris44_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5);
++#else
++static inline u64 iris44_diag_begin(const void *ctx, int mode)
++{ (void)ctx; (void)mode; return 0; }
++static inline void iris44_diag_end(u64 op, const void *ctx, int result)
++{ (void)op; (void)ctx; (void)result; }
++static inline void iris44_diag_attempt(u32 attempt) { (void)attempt; }
++static inline void iris44_diag_dump(bool active) { (void)active; }
++static inline void iris44_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5)
++{
++	(void)event; (void)ctx; (void)v0; (void)v1; (void)v2;
++	(void)v3; (void)v4; (void)v5;
++}
++#endif
++
++/* Original ignored callback result stays ignored, even when diagnostics are OFF. */
++static inline void iris44_diag_rc(u32 event, const void *ctx, int result)
++{
++	iris44_diag(event, ctx, result, 0, 0, 0, 0, 0);
++}
++#endif
+diff --git a/qcom/opensource/display-drivers/msm/sde/sde_trace.h b/qcom/opensource/display-drivers/msm/sde/sde_trace.h
+index 4b6e5f2..2b9a99a 100644
+--- a/qcom/opensource/display-drivers/msm/sde/sde_trace.h
++++ b/qcom/opensource/display-drivers/msm/sde/sde_trace.h
+@@ -10,12 +10,46 @@
+ #include <linux/stringify.h>
+ #include <linux/types.h>
+ #include <linux/tracepoint.h>
++#include "../iris_host_diag.h"
+ 
+ #undef TRACE_SYSTEM
+ #define TRACE_SYSTEM sde
+ #undef TRACE_INCLUDE_FILE
+ #define TRACE_INCLUDE_FILE sde_trace
+ 
++/* Stage44: TP_printk formats a trace record; it does not call printk. */
++TRACE_EVENT(iris44_host,
++	TP_PROTO(const struct iris44_record *r),
++	TP_ARGS(r),
++	TP_STRUCT__entry(
++		__field(u64, op) __field(u64, ns)
++		__field(u32, seq) __field(u32, attempt) __field(u32, event)
++		__field(int, owner) __field(int, pid)
++		__field(u32, dropped) __field(u32, overlap)
++		__field(u32, suppressed)
++		__field(const void *, ctx)
++		__field(s64, v0) __field(s64, v1) __field(s64, v2)
++		__field(s64, v3) __field(s64, v4) __field(s64, v5)
++	),
++	TP_fast_assign(
++		__entry->op = r->op; __entry->ns = r->ns;
++		__entry->seq = r->seq; __entry->attempt = r->attempt;
++		__entry->event = r->event; __entry->owner = r->owner;
++		__entry->pid = r->pid; __entry->dropped = r->dropped;
++		__entry->overlap = r->overlap; __entry->suppressed = r->suppressed;
++		__entry->ctx = r->ctx;
++		__entry->v0 = r->v0; __entry->v1 = r->v1; __entry->v2 = r->v2;
++		__entry->v3 = r->v3; __entry->v4 = r->v4; __entry->v5 = r->v5;
++	),
++	TP_printk("op=%llu ns=%llu seq=%u a=%u ev=%u owner=%d pid=%d drop=%u overlap=%u suppressed=%u ctx=%p v=%lld,%lld,%lld,%lld,%lld,%lld",
++		(unsigned long long)__entry->op, (unsigned long long)__entry->ns,
++		__entry->seq, __entry->attempt, __entry->event,
++		__entry->owner, __entry->pid, __entry->dropped, __entry->overlap, __entry->suppressed,
++		__entry->ctx, (long long)__entry->v0, (long long)__entry->v1,
++		(long long)__entry->v2, (long long)__entry->v3,
++		(long long)__entry->v4, (long long)__entry->v5)
++);
++
+ TRACE_EVENT(sde_perf_set_qos_luts,
+ 	TP_PROTO(u32 pnum, u32 fmt, u32 mode, u32 danger_lut,
+ 		u32 safe_lut, u64 creq_lut),

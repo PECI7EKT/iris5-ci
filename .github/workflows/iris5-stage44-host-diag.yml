@@ -1,0 +1,66 @@
+name: Iris5 Stage44 - full module build and ABI validation
+on:
+  push:
+    branches: [iris5-stage44-host-diag-20261021]
+    paths: ['ci/stage44/**', '.github/workflows/iris5-stage44-host-diag.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: iris5-stage44-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  stage44-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout isolated Stage44 CI variant
+        uses: actions/checkout@v4
+      - name: Restore exact successful foundation
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-v2-foundation-8
+          run-id: 39088927882
+          github-token: ${{ github.token }}
+          path: stage18-foundation
+      - name: Download successful Stage36 binary reference
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage36--1
+          run-id: 39459692406
+          github-token: ${{ github.token }}
+          path: stage36-reference
+      - name: Verify fixed recipe and source inputs
+        run: |
+          set -euo pipefail
+          python3 ci/stage44/check_inputs.py
+          python3 ci/verify_reference.py
+          bash ci/scripts/fetch_sources.sh
+      - name: Restore matching output and build authentic providers and pristine baseline
+        run: bash ci/stage18/run.sh baseline
+      - name: Reproduce exact Stage36 module in this same environment
+        run: bash ci/stage36/run.sh build
+      - name: Build full Stage44 diagnostic module and validate symbol ABI
+        run: bash ci/stage44/run.sh
+      - name: Preserve build evidence and modules - no firmware or flashable ZIP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage44-module-${{ github.run_number }}
+          path: |
+            ci-out/stage44/
+            ci-out/stage36/
+            ci-out/stage18-logs/
+            ci-out/foundation_restored.json
+            ci-out/external_crc_check.json
+            ci-out/stage18_clang.txt
+            ci-out/stage18_lld.txt
+            ci-out/stage18_pahole.txt
+            ci-out/stage18_progress.txt
+            ci-out/stage18_exit_code.txt
+          if-no-files-found: warn
+          retention-days: 14
