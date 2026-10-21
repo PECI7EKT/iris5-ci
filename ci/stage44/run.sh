@@ -78,12 +78,17 @@ KO="$DR/msm/msm_drm.ko"
 cp "$KO" "$OUT/modules/STAGE44_DIAGNOSTIC_msm_drm.ko"
 cp "$DR/Module.symvers" "$OUT/symbols/stage44.Module.symvers"
 for f in "$DR"/msm/.msm_drm*.cmd; do
-  [[ -f "$f" ]] && cp "$f" "$OUT/config/${f##*/}"
+  if [[ -f "$f" ]]; then
+    label="${f##*/}"
+    cp "$f" "$OUT/config/${label#.}"
+  fi
 done
 for rel in iris/iris5/.dsi_iris5_lp.o.cmd iris/iris5/.dsi_iris5_gpio.o.cmd dsi/.dsi_clk_manager.o.cmd dsi/.dsi_phy.o.cmd dsi/.dsi_pll_5nm.o.cmd sde/.sde_kms.o.cmd; do
   f="$DR/msm/$rel"
   [[ -s "$f" ]]
-  cp "$f" "$OUT/config/${f##*/}"
+  label="${f##*/}"
+  cp "$f" "$OUT/config/${label#.}"
 done
+sha256sum "$OUT/modules/"*.ko > "$OUT/module_sha256.txt"
 python3 "$SCRIPT/verify_binary.py" "$OUT"
 echo 'STAGE44 FULL MODULE BUILD + STATIC ABI VALIDATION PASS; NOT DEVICE TESTED'
