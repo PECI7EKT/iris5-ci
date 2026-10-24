@@ -1,0 +1,39 @@
+name: Iris5 Stage46 - validated Stage44 EROFS image
+on:
+  push:
+    branches: [iris5-stage46-erofs-20261024]
+    paths: ['ci/stage46/**', '.github/workflows/iris5-stage46-image.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  erofs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact Stage36 filesystem and audit evidence
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39462925123
+          name: iris5-stage36-image
+          github-token: ${{ github.token }}
+          path: input36
+      - name: Download exact successful Stage45 module artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39594524459
+          name: iris5-stage44-module-2
+          github-token: ${{ github.token }}
+          path: input45
+      - name: Repack and validate with pinned EROFS tools - no device operations
+        run: bash ci/stage46/run.sh
+      - name: Preserve complete evidence - image is exported only after all gates pass
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage46-erofs-${{ github.run_number }}
+          path: stage46-output/
+          if-no-files-found: warn
+          retention-days: 14
