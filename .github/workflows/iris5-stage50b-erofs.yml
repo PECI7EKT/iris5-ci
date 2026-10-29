@@ -1,0 +1,39 @@
+name: Iris5 Stage50B - EROFS packaging only
+on:
+  push:
+    branches: [iris5-stage50b-erofs-20261029]
+    paths: ['ci/stage50b_image/**', '.github/workflows/iris5-stage50b-erofs.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package-erofs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact previously installed Stage44 image - user confirmed
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage46-erofs-1
+          run-id: 40127883387
+          github-token: ${{ github.token }}
+          path: input44
+      - name: Full ABI-validated Stage50B module and Stage44 baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage50b-abi-validated-1
+          run-id: 40886306895
+          github-token: ${{ github.token }}
+          path: input50b
+      - name: Repack EROFS preserving every path and metadata
+        run: bash ci/stage50b_image/run.sh
+      - name: Preserve filesystem-only image, module strip audit and metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage50b-erofs-${{ github.run_number }}
+          path: stage50b-image-output/
+          if-no-files-found: error
+          retention-days: 14
