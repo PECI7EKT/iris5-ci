@@ -1,0 +1,560 @@
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_ctrl.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_ctrl.c
+@@ -15,6 +15,7 @@
+ #include "msm_kms.h"
+ #include "msm_mmu.h"
+ #include "dsi_ctrl.h"
++#include "../iris_host_diag.h"
+ #include "dsi_ctrl_hw.h"
+ #include "dsi_clk.h"
+ #include "dsi_pwr.h"
+@@ -3571,6 +3572,7 @@
+ 	}
+ 
+ 	mutex_lock(&dsi_ctrl->ctrl_lock);
++	iris50b_diag(IRIS50B_DSI_CMD_BEGIN, dsi_ctrl, cmd->msg.type, cmd->msg.tx_len, cmd->msg.rx_len, cmd->ctrl_flags, cmd->msg.flags, 0);
+ 
+ 	if (cmd->ctrl_flags & DSI_CTRL_CMD_READ) {
+ 		rc = dsi_message_rx(dsi_ctrl, cmd);
+@@ -3587,6 +3589,7 @@
+ 	cmd->ts = dsi_ctrl->cmd_success_ts;
+ 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_CMD_TX, 0x0);
+ 
++	iris50b_diag(IRIS50B_DSI_CMD_END, dsi_ctrl, rc, cmd->msg.type, cmd->msg.tx_len, cmd->msg.rx_len, cmd->ctrl_flags, cmd->msg.flags);
+ 	mutex_unlock(&dsi_ctrl->ctrl_lock);
+ 	return rc;
+ }
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_display.c
+@@ -23,6 +23,7 @@
+ #include "dsi_pwr.h"
+ #include "sde_dbg.h"
+ #include "dsi_parser.h"
++#include "../iris_host_diag.h"
+ #if defined(CONFIG_PXLW_IRIS)
+ #include "dsi_iris_api.h"
+ 
+@@ -924,6 +925,7 @@
+ #if defined(CONFIG_PXLW_IRIS)
+ 	if (iris_is_chip_supported()) {
+ 		rc = iris_status_get(ctrl, display->panel);
++		iris50b_diag(IRIS50B_ESD_IRIS_RC, display, rc, 0, 0, 0, 0, 0);
+ 		if (rc <= 1)
+ 			goto exit;
+ 	}
+@@ -1067,7 +1069,9 @@
+ 
+ 	panel = dsi_display->panel;
+ 
++	iris50b_diag(IRIS50B_ESD_PANEL_REQ, dsi_display, 0, 0, 0, 0, 0, 0);
+ 	dsi_panel_acquire_panel_lock(panel);
++	iris50b_diag(IRIS50B_ESD_PANEL_ACQ, dsi_display, 0, 0, 0, 0, 0, 0);
+ 
+ 	if (!panel->panel_initialized) {
+ 		DSI_DEBUG("Panel not initialized\n");
+@@ -1079,6 +1083,7 @@
+ 		goto release_panel_lock;
+ 
+ 	status_mode = panel->esd_config.status_mode;
++	iris50b_diag(IRIS50B_ESD_STATE, dsi_display, status_mode, panel->panel_initialized, atomic_read(&panel->esd_recovery_pending), dsi_display->ulps_enabled, dsi_display->clamp_enabled, dsi_display->phy_idle_power_off);
+ 
+ 	if ((status_mode == ESD_MODE_SW_SIM_SUCCESS) || is_sim_panel(display))
+ 		goto release_panel_lock;
+@@ -1103,6 +1108,7 @@
+ 	/* Disable error interrupts while doing an ESD check */
+ 	dsi_display_toggle_error_interrupt_status(dsi_display, false);
+ 
++	iris50b_diag(IRIS50B_ESD_BRANCH, dsi_display, status_mode, te_check_override, te_rechecks, 0, 0, 0);
+ 	if (status_mode == ESD_MODE_REG_READ) {
+ 		rc = dsi_display_status_reg_read(dsi_display);
+ 	} else if (status_mode == ESD_MODE_SW_BTA) {
+@@ -1124,6 +1130,7 @@
+ 					te_rechecks);
+ 	}
+ 
++	iris50b_diag(IRIS50B_ESD_RESULT, dsi_display, rc, status_mode, te_check_override, 0, 0, 0);
+ 	/* Handle Panel failures during display disable sequence */
+ 	if (rc <=0)
+ 		atomic_set(&panel->esd_recovery_pending, 1);
+@@ -1134,6 +1141,7 @@
+ 	dsi_display_clk_ctrl(dsi_display->dsi_clk_handle, DSI_ALL_CLKS, DSI_CLK_OFF);
+ release_panel_lock:
+ 	dsi_panel_release_panel_lock(panel);
++	iris50b_diag(IRIS50B_ESD_PANEL_RELEASE, dsi_display, rc, 0, 0, 0, 0, 0);
+ 	SDE_EVT32(SDE_EVTLOG_FUNC_EXIT, rc);
+ 
+ 	return rc;
+@@ -2406,12 +2414,14 @@
+ 	 * the DSI PHY depending on hardware variation
+ 	 */
+ 	rc = dsi_ctrl_set_clamp_state(m_ctrl->ctrl, enable, ulps_enabled);
++	iris50b_diag(IRIS50B_CLAMP_CTRL, display, enable, rc, ulps_enabled, display->cmd_master_idx, 0, 0);
+ 	if (rc) {
+ 		DSI_ERR("DSI ctrl clamp state change(%d) failed\n", enable);
+ 		return rc;
+ 	}
+ 
+ 	rc = dsi_phy_set_clamp_state(m_ctrl->phy, enable);
++	iris50b_diag(IRIS50B_CLAMP_PHY, display, enable, rc, ulps_enabled, display->cmd_master_idx, 0, 0);
+ 	if (rc) {
+ 		DSI_ERR("DSI phy clamp state change(%d) failed\n", enable);
+ 		return rc;
+@@ -2423,12 +2433,14 @@
+ 			continue;
+ 
+ 		rc = dsi_ctrl_set_clamp_state(ctrl->ctrl, enable, ulps_enabled);
++		iris50b_diag(IRIS50B_CLAMP_CTRL, display, enable, rc, ulps_enabled, i, 0, 0);
+ 		if (rc) {
+ 			DSI_ERR("DSI Clamp state change(%d) failed\n", enable);
+ 			return rc;
+ 		}
+ 
+ 		rc = dsi_phy_set_clamp_state(ctrl->phy, enable);
++		iris50b_diag(IRIS50B_CLAMP_PHY, display, enable, rc, ulps_enabled, i, 0, 0);
+ 		if (rc) {
+ 			DSI_ERR("DSI phy clamp state change(%d) failed\n",
+ 				enable);
+@@ -3015,6 +3027,7 @@
+ 	display_for_each_ctrl(i, display) {
+ 		ctrl = &display->ctrl[i];
+ 		dsi_phy_toggle_resync_fifo(ctrl->phy);
++		iris50b_diag(IRIS50B_FIFO_TOGGLE, display, i, 0, 0, 0, 0, 0);
+ 	}
+ 
+ 	/*
+@@ -3028,6 +3041,7 @@
+ 	display_for_each_ctrl(i, display) {
+ 		ctrl = &display->ctrl[i];
+ 		dsi_phy_reset_clk_en_sel(ctrl->phy);
++		iris50b_diag(IRIS50B_FIFO_CLK_RESET, display, i, 0, 0, 0, 0, 0);
+ 	}
+ 
+ }
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_phy.c
+@@ -887,8 +887,10 @@
+ 	 * should be skipped during ULPS entry programming while coming
+ 	 * out of idle screen.
+ 	 */
++	iris50b_diag(IRIS50B_ULPS_BACKEND, phy, 1, phy->hw.version, lanes, clamp_enabled, 0, 0);
+ 	if (!clamp_enabled) {
+ 		rc = phy->hw.ops.ulps_ops.wait_for_lane_idle(&phy->hw, lanes);
++		iris50b_diag(IRIS50B_ULPS_IDLE_RESULT, phy, rc, lanes, 0, 0, 0, 0);
+ 		if (rc) {
+ 			DSI_PHY_ERR(phy, "lanes not entering idle, skip ULPS\n");
+ 			return rc;
+@@ -898,6 +900,7 @@
+ 	phy->hw.ops.ulps_ops.ulps_request(&phy->hw, &phy->cfg, lanes);
+ 
+ 	ulps_lanes = phy->hw.ops.ulps_ops.get_lanes_in_ulps(&phy->hw);
++	iris50b_diag(IRIS50B_ULPS_SAMPLE, phy, 1, lanes, ulps_lanes, clamp_enabled, 0, 0);
+ 
+ 	if (!phy->hw.ops.ulps_ops.is_lanes_in_ulps(lanes, ulps_lanes)) {
+ 		DSI_PHY_ERR(phy, "Failed to enter ULPS, request=0x%x, actual=0x%x\n",
+@@ -917,7 +920,9 @@
+ 	if (!dsi_is_type_cphy(&config->common_config))
+ 		lanes |= DSI_CLOCK_LANE;
+ 
++	iris50b_diag(IRIS50B_ULPS_BACKEND, phy, 0, phy->hw.version, lanes, 0, 0, 0);
+ 	ulps_lanes = phy->hw.ops.ulps_ops.get_lanes_in_ulps(&phy->hw);
++	iris50b_diag(IRIS50B_ULPS_SAMPLE, phy, 0, lanes, ulps_lanes, 0, 0, 0);
+ 
+ 	if (!phy->hw.ops.ulps_ops.is_lanes_in_ulps(lanes, ulps_lanes)) {
+ 		DSI_PHY_ERR(phy, "Mismatch in ULPS: lanes:%d, ulps_lanes:%d\n",
+@@ -928,6 +933,7 @@
+ 	phy->hw.ops.ulps_ops.ulps_exit(&phy->hw, &phy->cfg, lanes);
+ 
+ 	ulps_lanes = phy->hw.ops.ulps_ops.get_lanes_in_ulps(&phy->hw);
++	iris50b_diag(IRIS50B_ULPS_SAMPLE, phy, 0, lanes, ulps_lanes, 0, 0, 0);
+ 
+ 	if (phy->hw.ops.ulps_ops.is_lanes_in_ulps(lanes, ulps_lanes)) {
+ 		DSI_PHY_ERR(phy, "Lanes (0x%x) stuck in ULPS\n", ulps_lanes);
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_phy_hw_v4_0.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_phy_hw_v4_0.c
+@@ -11,6 +11,7 @@
+ #include "dsi_defs.h"
+ #include "dsi_phy_hw.h"
+ #include "dsi_catalog.h"
++#include "../iris_host_diag.h"
+ 
+ #define DSIPHY_CMN_REVISION_ID0						0x000
+ #define DSIPHY_CMN_REVISION_ID1						0x004
+@@ -645,6 +646,7 @@
+ 	 * ULPS entry request. Wait for short time to make sure
+ 	 * that the lanes enter ULPS. Recommended as per HPG.
+ 	 */
++	iris50b_diag(IRIS50B_LANE4_ENTER, phy, lanes, reg, 0, 0, 0, 0);
+ 	DSI_W32(phy, DSIPHY_CMN_LANE_CTRL1, reg);
+ 	usleep_range(100, 110);
+ 
+@@ -698,6 +700,7 @@
+ 	/* enable LPRX and CDRX */
+ 	dsi_phy_hw_v4_0_config_lpcdrx(phy, cfg, true);
+ 
++	iris50b_diag(IRIS50B_LANE4_EXIT, phy, lanes, reg, 0, 0, 0, 0);
+ 	/* ULPS exit request */
+ 	DSI_W32(phy, DSIPHY_CMN_LANE_CTRL2, reg);
+ 	usleep_range(1000, 1010);
+@@ -713,9 +716,11 @@
+ 	 * commands not going through. To avoid this, force the lanes
+ 	 * to be in stop state.
+ 	 */
++	iris50b_diag(IRIS50B_LANE4_STOP_IN, phy, lanes, reg, 0, 0, 0, 0);
+ 	DSI_W32(phy, DSIPHY_CMN_LANE_CTRL3, reg);
+ 	DSI_W32(phy, DSIPHY_CMN_LANE_CTRL3, 0);
+ 	usleep_range(100, 110);
++	iris50b_diag(IRIS50B_LANE4_STOP_OUT, phy, lanes, reg, 0, 0, 0, 0);
+ 
+ 	if (cfg->force_clk_lane_hs) {
+ 		reg = BIT(5) | BIT(6);
+--- a/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
++++ b/qcom/opensource/display-drivers/msm/dsi/dsi_pll_5nm.c
+@@ -605,6 +605,7 @@
+ 				       ((status & BIT(0)) > 0),
+ 				       delay_us,
+ 				       timeout_us);
++	iris50b_diag(IRIS50B_PLL_LOCK_RESULT, pll, rc, status, pll->index, 0, 0, 0);
+ 	if (rc)
+ 		DSI_PLL_ERR(pll, "lock failed, status=0x%08x\n", status);
+ 
+@@ -635,6 +636,7 @@
+ 
+ 	data = DSI_PLL_REG_R(rsc->phy_base, PHY_CMN_CLK_CFG1);
+ 	DSI_PLL_REG_W(rsc->phy_base, PHY_CMN_CLK_CFG1, (data & ~BIT(5)));
++	iris50b_diag(IRIS50B_PLL_GLOBAL_OFF, rsc, rsc->index, 0, 0, 0, 0, 0);
+ }
+ 
+ static void dsi_pll_enable_global_clk(struct dsi_pll_resource *rsc)
+@@ -648,6 +650,7 @@
+ 	/* Turn on clk_en_sel bit prior to resync toggle fifo */
+ 	DSI_PLL_REG_W(rsc->phy_base, PHY_CMN_CLK_CFG1, (data | BIT(5) |
+ 								BIT(4)));
++	iris50b_diag(IRIS50B_PLL_GLOBAL_ON, rsc, rsc->index, 0, 0, 0, 0, 0);
+ }
+ 
+ static void dsi_pll_phy_dig_reset(struct dsi_pll_resource *rsc)
+@@ -657,10 +660,12 @@
+ 	 * coming out of a CX or analog rail power collapse while
+ 	 * ensuring that the pads maintain LP00 or LP11 state
+ 	 */
++	iris50b_diag(IRIS50B_PLL_DIG_RESET_IN, rsc, rsc->index, 0, 0, 0, 0, 0);
+ 	DSI_PLL_REG_W(rsc->phy_base, PHY_CMN_GLBL_DIGTOP_SPARE4, BIT(0));
+ 	wmb(); /* Ensure that the reset is asserted */
+ 	DSI_PLL_REG_W(rsc->phy_base, PHY_CMN_GLBL_DIGTOP_SPARE4, 0x0);
+ 	wmb(); /* Ensure that the reset is deasserted */
++	iris50b_diag(IRIS50B_PLL_DIG_RESET_OUT, rsc, rsc->index, 0, 0, 0, 0, 0);
+ }
+ 
+ static void dsi_pll_disable_sub(struct dsi_pll_resource *rsc)
+--- a/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
++++ b/qcom/opensource/display-drivers/msm/iris/iris5/dsi_iris5_lp.c
+@@ -29,6 +29,8 @@
+ #include <linux/ktime.h>
+ #include <linux/sched.h>
+ #include <linux/spinlock.h>
++#include <linux/atomic.h>
++#include <linux/string.h>
+ #include "../../iris_host_diag.h"
+ 
+ #define DEBUG_READ_PMU
+@@ -239,6 +241,170 @@
+ 	if (READ_ONCE(iris44_host_diag) && trace_iris44_host_enabled())
+ 		trace_iris44_host(&r);
+ }
++
++/* Stage50B observer: diagnostic state only; no device reads or driver locks. */
++#define IRIS50B_WINDOW_NS (30ULL * NSEC_PER_SEC)
++static bool iris50b_observe;
++static struct {
++	u64 generation, start_ns, rate_ns, seen_op, seq;
++	u32 major_rate, detail_rate, major_used, detail_used;
++	u32 dropped, suppressed;
++} iris50b_state;
++static atomic_t iris50b_irq_skipped = ATOMIC_INIT(0);
++static atomic_t iris50b_expired_skipped = ATOMIC_INIT(0);
++
++static int iris50b_set(const char *value, const struct kernel_param *kp)
++{
++	struct kernel_param temporary = *kp;
++	unsigned long flags;
++	bool requested = false;
++	int rc;
++
++	temporary.arg = &requested;
++	rc = param_ops_bool.set(value, &temporary);
++	if (rc)
++		return rc;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (requested && READ_ONCE(iris50b_observe)) {
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return -EBUSY;
++	}
++	if (requested) {
++		u64 generation = iris50b_state.generation + 1;
++		u64 now = ktime_get_ns();
++
++		memset(&iris50b_state, 0, sizeof(iris50b_state));
++		iris50b_state.generation = generation;
++		iris50b_state.start_ns = now;
++		iris50b_state.rate_ns = now;
++		atomic_set(&iris50b_irq_skipped, 0);
++		atomic_set(&iris50b_expired_skipped, 0);
++	}
++	WRITE_ONCE(iris50b_observe, requested);
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	return 0;
++}
++
++static int iris50b_get_bool(char *buffer, const struct kernel_param *kp)
++{
++	return param_ops_bool.get(buffer, kp);
++}
++
++static int iris50b_get_stats(char *buffer, const struct kernel_param *kp)
++{
++	unsigned long flags;
++	u64 generation, elapsed_ms, seq, seen_op;
++	u32 major, detail, dropped, suppressed;
++	bool enabled, finished;
++
++	(void)kp;
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	generation = iris50b_state.generation;
++	elapsed_ms = generation ? (ktime_get_ns() - iris50b_state.start_ns) / 1000000 : 0;
++	seq = iris50b_state.seq;
++	seen_op = iris50b_state.seen_op;
++	major = iris50b_state.major_used;
++	detail = iris50b_state.detail_used;
++	dropped = iris50b_state.dropped;
++	suppressed = iris50b_state.suppressed;
++	enabled = READ_ONCE(iris50b_observe);
++	finished = seen_op && (!iris44_state.active || iris44_state.op != seen_op);
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	return scnprintf(buffer, 512,
++		"enabled=%u gen=%llu elapsed_ms=%llu seq=%llu op=%llu major=%u detail=%u dropped=%u suppressed=%u irq_skipped=%d expired_skipped=%d finished=%u expired=%u\n",
++		enabled, (unsigned long long)generation, (unsigned long long)elapsed_ms,
++		(unsigned long long)seq, (unsigned long long)seen_op,
++		major, detail, dropped, suppressed,
++		atomic_read(&iris50b_irq_skipped), atomic_read(&iris50b_expired_skipped),
++		finished, elapsed_ms >= 30000);
++}
++
++static const struct kernel_param_ops iris50b_observe_ops = {
++	.set = iris50b_set,
++	.get = iris50b_get_bool,
++};
++static const struct kernel_param_ops iris50b_stats_ops = {
++	.get = iris50b_get_stats,
++};
++module_param_cb(iris50b_observe, &iris50b_observe_ops, &iris50b_observe, 0600);
++MODULE_PARM_DESC(iris50b_observe, "Stage50B bounded observation, default OFF; N then Y arms 30 seconds");
++module_param_cb(iris50b_stats, &iris50b_stats_ops, NULL, 0400);
++MODULE_PARM_DESC(iris50b_stats, "Stage50B software observer counters; read only");
++
++void iris50b_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5)
++{
++	struct iris50b_record r;
++	unsigned long flags;
++	u64 generation, now;
++	bool detail = event >= IRIS50B_ULPS_BACKEND;
++
++	if (!READ_ONCE(iris50b_observe) || !trace_iris50b_observe_enabled())
++		return;
++	if (in_interrupt() || irqs_disabled()) {
++		atomic_inc(&iris50b_irq_skipped);
++		return;
++	}
++	generation = READ_ONCE(iris50b_state.generation);
++	now = ktime_get_ns();
++	if (now - READ_ONCE(iris50b_state.start_ns) >= IRIS50B_WINDOW_NS) {
++		atomic_inc(&iris50b_expired_skipped);
++		return;
++	}
++	spin_lock_irqsave(&iris44_diag_lock, flags);
++	if (!READ_ONCE(iris50b_observe) || generation != iris50b_state.generation ||
++	    (iris50b_state.seen_op &&
++	     (!iris44_state.active || iris44_state.op != iris50b_state.seen_op))) {
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	now = ktime_get_ns();
++	if (now - iris50b_state.start_ns >= IRIS50B_WINDOW_NS) {
++		atomic_inc(&iris50b_expired_skipped);
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	if (iris44_state.active && !iris50b_state.seen_op)
++		iris50b_state.seen_op = iris44_state.op;
++	if (iris44_state.active && iris44_state.dump &&
++	    iris44_state.owner == task_pid_nr(current)) {
++		iris50b_state.suppressed++;
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	if (now - iris50b_state.rate_ns >= NSEC_PER_SEC) {
++		iris50b_state.rate_ns = now;
++		iris50b_state.major_rate = 0;
++		iris50b_state.detail_rate = 0;
++	}
++	iris50b_state.seq++;
++	if ((detail && (iris50b_state.detail_rate >= 128 || iris50b_state.detail_used >= 512)) ||
++	    (!detail && (iris50b_state.major_rate >= 64 || iris50b_state.major_used >= 128))) {
++		iris50b_state.dropped++;
++		spin_unlock_irqrestore(&iris44_diag_lock, flags);
++		return;
++	}
++	if (detail) {
++		iris50b_state.detail_rate++;
++		iris50b_state.detail_used++;
++	} else {
++		iris50b_state.major_rate++;
++		iris50b_state.major_used++;
++	}
++	r = (struct iris50b_record) {
++		.generation = generation, .ns = now, .seq = iris50b_state.seq,
++		.op = iris44_state.active ? iris44_state.op : 0,
++		.attempt = iris44_state.active ? iris44_state.attempt : 0,
++		.owner = iris44_state.active ? iris44_state.owner : 0,
++		.pid = task_pid_nr(current), .event = event,
++		.dropped = iris50b_state.dropped, .suppressed = iris50b_state.suppressed,
++		.ctx = ctx, .v0 = v0, .v1 = v1, .v2 = v2,
++		.v3 = v3, .v4 = v4, .v5 = v5,
++	};
++	spin_unlock_irqrestore(&iris44_diag_lock, flags);
++	trace_iris50b_observe(&r);
++}
++/* End Stage50B observer. */
+ 
+ module_param_named(iris33_postreset_pulse, iris33_postreset_pulse, bool, 0600);
+ MODULE_PARM_DESC(iris33_postreset_pulse, "Stage33 test post-reset DSI pulse (default OFF)");
+@@ -1208,8 +1374,12 @@
+ 			int j = 0;
+ 
+ 			pending_cnt = atomic_read(&phys->pending_kickoff_cnt);
+-			for (j = 0; j < pending_cnt; j++)
+-				sde_encoder_wait_for_event(phys->parent, MSM_ENC_TX_COMPLETE);
++			iris50b_diag(IRIS50B_FRAME_PENDING, phys, pending_cnt, i, 0, 0, 0, 0);
++			for (j = 0; j < pending_cnt; j++) {
++				int wait_rc = sde_encoder_wait_for_event(phys->parent, MSM_ENC_TX_COMPLETE);
++
++				iris50b_diag(IRIS50B_FRAME_RESULT, phys, wait_rc, j, pending_cnt, 0, 0, 0);
++			}
+ 
+ 			break;
+ 		}
+--- a/qcom/opensource/display-drivers/msm/iris_host_diag.h
++++ b/qcom/opensource/display-drivers/msm/iris_host_diag.h
+@@ -59,4 +59,41 @@
+ {
+ 	iris44_diag(event, ctx, result, 0, 0, 0, 0, 0);
+ }
++/* Stage50B IDs describe observations, never requests to alter hardware. */
++enum iris50b_event {
++	IRIS50B_WORK_LOCK_REQ = 1, IRIS50B_WORK_LOCK_ACQ, IRIS50B_WORK_UNLOCK,
++	IRIS50B_ESD_PANEL_REQ = 16, IRIS50B_ESD_PANEL_ACQ,
++	IRIS50B_ESD_STATE, IRIS50B_ESD_BRANCH, IRIS50B_ESD_RESULT,
++	IRIS50B_ESD_PANEL_RELEASE, IRIS50B_ESD_IRIS_RC,
++	IRIS50B_FRAME_PENDING = 32, IRIS50B_FRAME_RESULT,
++	IRIS50B_ULPS_BACKEND = 128, IRIS50B_ULPS_IDLE_RESULT,
++	IRIS50B_ULPS_SAMPLE, IRIS50B_LANE4_ENTER, IRIS50B_LANE4_EXIT,
++	IRIS50B_LANE4_STOP_IN, IRIS50B_LANE4_STOP_OUT,
++	IRIS50B_PLL_LOCK_RESULT = 160, IRIS50B_PLL_DIG_RESET_IN,
++	IRIS50B_PLL_DIG_RESET_OUT, IRIS50B_PLL_GLOBAL_ON, IRIS50B_PLL_GLOBAL_OFF,
++	IRIS50B_CLAMP_CTRL = 176, IRIS50B_CLAMP_PHY,
++	IRIS50B_FIFO_TOGGLE, IRIS50B_FIFO_CLK_RESET,
++	IRIS50B_DSI_CMD_BEGIN = 192, IRIS50B_DSI_CMD_END,
++};
++
++struct iris50b_record {
++	u64 generation, op, ns, seq;
++	u32 attempt, event, dropped, suppressed;
++	int owner, pid;
++	const void *ctx;
++	s64 v0, v1, v2, v3, v4, v5;
++};
++
++#if defined(CONFIG_PXLW_IRIS)
++void iris50b_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5);
++#else
++static inline void iris50b_diag(u32 event, const void *ctx,
++	s64 v0, s64 v1, s64 v2, s64 v3, s64 v4, s64 v5)
++{
++	(void)event; (void)ctx; (void)v0; (void)v1; (void)v2;
++	(void)v3; (void)v4; (void)v5;
++}
+ #endif
++
++#endif
+--- a/qcom/opensource/display-drivers/msm/sde/sde_connector.c
++++ b/qcom/opensource/display-drivers/msm/sde/sde_connector.c
+@@ -7,6 +7,7 @@
+ #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
+ #include "msm_drv.h"
+ #include "sde_dbg.h"
++#include "../iris_host_diag.h"
+ 
+ #include "sde_kms.h"
+ #include "sde_connector.h"
+@@ -2910,18 +2911,22 @@
+ 		return;
+ 	}
+ 
++	iris50b_diag(IRIS50B_WORK_LOCK_REQ, conn, 0, 0, 0, 0, 0, 0);
+ 	mutex_lock(&conn->lock);
++	iris50b_diag(IRIS50B_WORK_LOCK_ACQ, conn, 0, 0, 0, 0, 0, 0);
+ 	dev = conn->base.dev->dev;
+ 
+ 	if (!conn->ops.check_status || dev->power.is_suspended ||
+ 			(conn->lp_mode == SDE_MODE_DPMS_OFF)) {
+ 		SDE_DEBUG("dpms mode: %d\n", conn->dpms_mode);
+ 		mutex_unlock(&conn->lock);
++		iris50b_diag(IRIS50B_WORK_UNLOCK, conn, rc, 1, 0, 0, 0, 0);
+ 		return;
+ 	}
+ 
+ 	rc = conn->ops.check_status(&conn->base, conn->display, false);
+ 	mutex_unlock(&conn->lock);
++	iris50b_diag(IRIS50B_WORK_UNLOCK, conn, rc, 0, 0, 0, 0, 0);
+ 
+ 	if (rc > 0) {
+ 		u32 interval;
+--- a/qcom/opensource/display-drivers/msm/sde/sde_trace.h
++++ b/qcom/opensource/display-drivers/msm/sde/sde_trace.h
+@@ -18,6 +18,35 @@
+ #define TRACE_INCLUDE_FILE sde_trace
+ 
+ /* Stage44: TP_printk formats a trace record; it does not call printk. */
++TRACE_EVENT(iris50b_observe,
++	TP_PROTO(const struct iris50b_record *r),
++	TP_ARGS(r),
++	TP_STRUCT__entry(
++		__field(u64, generation) __field(u64, op) __field(u64, ns) __field(u64, seq)
++		__field(u32, attempt) __field(u32, event)
++		__field(u32, dropped) __field(u32, suppressed)
++		__field(int, owner) __field(int, pid) __field(const void *, ctx)
++		__field(s64, v0) __field(s64, v1) __field(s64, v2)
++		__field(s64, v3) __field(s64, v4) __field(s64, v5)
++	),
++	TP_fast_assign(
++		__entry->generation = r->generation; __entry->op = r->op;
++		__entry->ns = r->ns; __entry->seq = r->seq;
++		__entry->attempt = r->attempt; __entry->event = r->event;
++		__entry->dropped = r->dropped; __entry->suppressed = r->suppressed;
++		__entry->owner = r->owner; __entry->pid = r->pid; __entry->ctx = r->ctx;
++		__entry->v0 = r->v0; __entry->v1 = r->v1; __entry->v2 = r->v2;
++		__entry->v3 = r->v3; __entry->v4 = r->v4; __entry->v5 = r->v5;
++	),
++	TP_printk("gen=%llu op=%llu ns=%llu seq=%llu a=%u ev=%u owner=%d pid=%d drop=%u suppressed=%u ctx=%p v=%lld,%lld,%lld,%lld,%lld,%lld",
++		(unsigned long long)__entry->generation, (unsigned long long)__entry->op,
++		(unsigned long long)__entry->ns, (unsigned long long)__entry->seq,
++		__entry->attempt, __entry->event, __entry->owner, __entry->pid,
++		__entry->dropped, __entry->suppressed, __entry->ctx,
++		(long long)__entry->v0, (long long)__entry->v1, (long long)__entry->v2,
++		(long long)__entry->v3, (long long)__entry->v4, (long long)__entry->v5)
++);
++
+ TRACE_EVENT(iris44_host,
+ 	TP_PROTO(const struct iris44_record *r),
+ 	TP_ARGS(r),
