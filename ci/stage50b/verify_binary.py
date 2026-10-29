@@ -37,13 +37,17 @@ def main(out):
  for name in ('__tracepoint_iris50b_observe','__traceiter_iris50b_observe','event_iris50b_observe','__event_iris50b_observe','__param_iris50b_observe','__param_iris50b_stats'):
   ck('registered '+name,name in y['observe_symbols'])
  ck('new diagnostics default OFF',y['default_false'] is True)
- for name in ('iris50b_observe:bool',):ck('module parameter '+name,name in b['modinfo'].get('parmtype',[]))
- ck('new module parameters only',set(b['modinfo'].get('parmtype',[]))-set(a['modinfo'].get('parmtype',[]))=={'iris50b_observe:bool'})
+ # Custom module_param_cb does not emit parmtype, unlike module_param_named.
+ ck('original parameter types unchanged',set(b['modinfo'].get('parmtype',[]))==set(a['modinfo'].get('parmtype',[])))
+ new_parms=set(b['modinfo'].get('parm',[]))-set(a['modinfo'].get('parm',[]))
+ ck('two diagnostic parameter descriptions only',len(new_parms)==2 and all(p.startswith(('iris50b_observe:','iris50b_stats:')) for p in new_parms))
  common=x['kcfi'].keys()&y['kcfi'].keys()
  changed={n:[x['kcfi'][n],y['kcfi'][n]] for n in common if x['kcfi'][n]!=y['kcfi'][n]}
  ck('retained KCFI IDs unchanged',not changed)
- for name in ('.BTF','.BTF.ext'):
+ # The historical Stage44 module has .BTF, but no .BTF.ext. Require parity.
+ for name in ('.BTF',):
   ck('nonempty '+name,any(s['name']==name and s['size']>0 for s in b['sections']))
+ ck('BTF extension presence matches baseline',any(s['name']=='.BTF.ext' for s in a['sections'])==any(s['name']=='.BTF.ext' for s in b['sections']))
  cfg=dict(re.findall(r'^(CONFIG_\w+)=(.*)$',(out/'config/kernel.config').read_text(),re.M))
  required=['CONFIG_CFI_CLANG','CONFIG_LTO_CLANG_THIN','CONFIG_MODVERSIONS','CONFIG_DEBUG_INFO_BTF','CONFIG_DEBUG_INFO_BTF_MODULES','CONFIG_MODULE_SIG_PROTECT']
  for n in required:ck(n,cfg.get(n)=='y')

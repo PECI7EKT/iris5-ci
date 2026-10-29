@@ -1,0 +1,55 @@
+name: Iris5 Stage50B - validate preserved complete build
+on:
+  push:
+    branches: [iris5-stage50b-observe-20261029]
+    paths: ['ci/stage50b/verify_binary.py', '.github/workflows/iris5-stage50b-validate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate-complete-module:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download unchanged output of complete Stage50B compilation
+        uses: actions/download-artifact@v4
+        with:
+          name: iris5-stage50b-observe-module-1
+          run-id: 40884004142
+          github-token: ${{ github.token }}
+          path: reproduced
+      - name: Verify immutable source and module identities
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,shutil
+          r=Path('reproduced/stage50b')
+          expected=json.loads(Path('ci/stage50b/source_manifest.json').read_text())
+          assert json.loads((r/'source/stage50b.json').read_text())['files']==expected
+          assert len(expected)==460
+          for p in (Path('ci/stage50b/stage50b_observe_only.patch'),r/'diffs/stage50b_observe_only.patch'):
+              assert hashlib.sha256(p.read_bytes()).hexdigest()=='9eeb8e873edd513044ae7b96a3edd83f009aa5a13ab716963a99cef7bf8b46b8'
+          assert hashlib.sha256((r/'modules/STAGE50B_OBSERVE_msm_drm.ko').read_bytes()).hexdigest()=='367e411e7e57a803a361d36c6615ce1f2a92855a2561b5ca2260ff2584eca1d9'
+          shutil.copyfile(r/'abi/compatibility_manifest.json',r/'abi/first_checker_result.json')
+          log=(r/'logs/compile.log').read_text()
+          for token in ('MODPOST','msm_drm.ko','BTF [M]'):
+              assert token in log,token
+          print('Exact 460 source hashes, diagnostic diff and full module identity: PASS')
+          PY
+      - name: Validate ABI with corrected baseline-aware checker
+        run: |
+          set -euo pipefail
+          python3 -m venv .abi-venv
+          .abi-venv/bin/pip install pyelftools==0.33
+          .abi-venv/bin/python ci/stage50b/verify_binary.py reproduced/stage50b | tee reproduced/stage50b/logs/corrected_abi_validation.log
+      - name: Preserve verified module and complete compilation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris5-stage50b-abi-validated-${{ github.run_number }}
+          path: reproduced/stage50b/
+          if-no-files-found: error
+          retention-days: 14

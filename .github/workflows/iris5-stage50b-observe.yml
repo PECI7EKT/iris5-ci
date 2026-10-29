@@ -1,8 +1,5 @@
 name: Iris5 Stage50B OBSERVE only - full module and ABI
 on:
-  push:
-    branches: [iris5-stage50b-observe-20261029]
-    paths: ['ci/stage50b/**', '.github/workflows/iris5-stage50b-observe.yml']
   workflow_dispatch:
 permissions:
   contents: read
